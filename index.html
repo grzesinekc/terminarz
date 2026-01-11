@@ -1,869 +1,315 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Calendar, Clock, Plus, Edit2, Trash2, X, MapPin, AlertCircle, Check, ChevronLeft, ChevronRight, Save, Sparkles, Loader2, RefreshCw } from 'lucide-react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, addDoc, onSnapshot, query, updateDoc, deleteDoc, doc, orderBy } from 'firebase/firestore';
-
-// --- Firebase Setup ---
-const firebaseConfig = JSON.parse(__firebase_config);
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
-// --- Gemini API Setup ---
-const apiKey = ""; // API Key injected at runtime
-
-const callGemini = async (prompt) => {
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    return null;
-  }
-};
-
-// --- Data & Quotes ---
-const QUOTES = [
-  "Nauczyciel to ktoś, kto mówi przez sen w cudzej obecności.",
-  "Dzwonek jest dla nauczyciela, ale przerwa dla ucznia.",
-  "Nie ma głupich pytań, są tylko głupi uczniowie... żartowałem!",
-  "Cisza w klasie to zjawisko paranormalne.",
-  "Wyciągamy karteczki... to zdanie, które mrozi krew w żyłach.",
-  "Zadanie domowe? Jakie zadanie? Przecież był weekend!",
-  "Gdyby uczniowie uczyli się tak, jak ściągają, wszyscy byliby geniuszami.",
-  "Nauczyciel: osoba, która pomaga rozwiązywać problemy, których byś nie miał bez niej.",
-  "Szkoła to jedyne miejsce, gdzie płacisz za to, że cię męczą... a nie, czekaj, to za darmo.",
-  "Wiedza to potęga, ale klucz do sali gimnastycznej to władza.",
-  "Kreda w ręku nauczyciela jest groźniejsza niż miecz świetlny.",
-  "Matematyka – jedyne miejsce, gdzie ludzie kupują 60 arbuzów i nikt nie pyta dlaczego.",
-  "Historia uczy, że ludzie niczego się nie uczą z historii.",
-  "WF to jedyna lekcja, na której bieganie w kółko ma sens.",
-  "Chemia: nauka o tym, jak nie wysadzić szkoły w powietrze.",
-  "Biologia: jedyny przedmiot, gdzie podział komórki to mnożenie.",
-  "Fizyka: bo magia jest dla Hogwartu.",
-  "Geografia: żebyś wiedział, gdzie uciekać na wagary.",
-  "Język polski: bo 'wziąść' to błąd śmiertelny.",
-  "Informatyka: próbowałeś wyłączyć i włączyć?",
-  "Nauczyciel widzi wszystko, nawet to, co masz pod ławką.",
-  "Dyrektor to taki szkolny Zeus, tylko bez piorunów.",
-  "Woźna: prawdziwa władczyni korytarzy.",
-  "Biblioteka: miejsce, gdzie cisza jest głośniejsza niż dzwonek.",
-  "Stołówka: ruletka smaków.",
-  "Przerwa obiadowa to walka o przetrwanie.",
-  "Sprawdzian: moment prawdy (lub kreatywnego pisania).",
-  "Ostatnia ławka: strefa VIP.",
-  "Pierwsza ławka: strefa rażenia śliną.",
-  "Tablica interaktywna: działa, dopóki nauczyciel nie chce jej użyć.",
-  "Kreda: brudzi ręce, ale czyści umysł.",
-  "Dziennik elektroniczny: Wielki Brat patrzy.",
-  "Zebranie z rodzicami: dzień sądu ostatecznego.",
-  "Wycieczka szkolna: kontrolowany chaos.",
-  "Dzień Nauczyciela: jedyny dzień, kiedy kwiaty są ważniejsze od wiedzy.",
-  "Koniec roku: święto niepodległości ucznia.",
-  "Początek roku: żałoba narodowa.",
-  "Zeszyt uwag: księga skarg i zażaleń.",
-  "Ściąga: małe dzieło sztuki mikrograficznej.",
-  "Podpowiedź kolegi: bezcenna, chyba że błędna.",
-  "Zgłoszenie nieprzygotowania: akt desperacji.",
-  "Symulowanie choroby: oscarowa gra aktorska.",
-  "Spóźnienie: 'autobus mi uciekł' to klasyk.",
-  "Zapomniany strój na WF: ławka rezerwowych.",
-  "Kanapka z serem: waluta wymienna.",
-  "Sklepik szkolny: centrum handlowe.",
-  "Korytarz podczas przerwy: autostrada bez zasad ruchu.",
-  "Toaleta szkolna: miejsce spotkań towarzyskich.",
-  "Szatanie: sport ekstremalny.",
-  "Dzwonek na lekcję: dźwięk rozpaczy.",
-  "Dzwonek na przerwę: symfonia radości.",
-  "Praca w grupach: jeden robi, reszta patrzy.",
-  "Prezentacja: czytanie ze slajdów.",
-  "Referat: kopiuj-wklej z Wikipedii.",
-  "Lektura: streszczenie streszczenia.",
-  "Egzamin: loteria fantowa.",
-  "Dyplom: papier cierpliwości.",
-  "Świadectwo z paskiem: powód do dumy (lub presji).",
-  "Wakacje: cel życia.",
-  "Ferie zimowe: krótki oddech.",
-  "Majówka: przedsmak wolności.",
-  "Piątek: mała soboty.",
-  "Poniedziałek: dzień zagłady.",
-  "Lekcja wychowawcza: czas na moralizowanie.",
-  "Godzina okienkowa: dar od losu.",
-  "Zastępstwo: kinder niespodjanka.",
-  "Plan lekcji: mapa drogowa przez mękę.",
-  "Tornister: ciężar wiedzy.",
-  "Piórnik: arsenał ucznia.",
-  "Długopis: zawsze wypisuje się na sprawdzianie.",
-  "Ołówek: złamany w najgorszym momencie.",
-  "Gumka do mazania: zaciera ślady zbrodni.",
-  "Linijka: miecz samuraja.",
-  "Cyrkiel: broń kłująca.",
-  "Kalkulator: przyjaciel na matematyce.",
-  "Słownik: ciężki argument.",
-  "Mapa: świat w rulonie.",
-  "Globus: piłka dla geografów.",
-  "Mikroskop: okno na inny świat.",
-  "Probówka: szkło wysokiego ryzyka.",
-  "Materac: miękkie lądowanie.",
-  "Kozioł: przeszkoda nie do pokonania.",
-  "Skrzynia: skarbiec kurzu.",
-  "Drabinki: schody do nieba.",
-  "Boisko: arena gladiatorów.",
-  "Bieżnia: droga donikąd.",
-  "Szkoła życia: najlepsza edukacja.",
-  "Nauczyciel z powołania: gatunek zagrożony.",
-  "Uczeń idealny: jednorożec.",
-  "Klasa: rodzina z wyboru (lub przymusu).",
-  "Przyjaźń szkolna: na całe życie.",
-  "Pierwsza miłość: zazwyczaj na przerwie.",
-  "Dyskoteka szkolna: taniec godowy.",
-  "Bal maturalny: noc oskarowa.",
-  "Polonez: taniec pingwinów.",
-  "Zdjęcie klasowe: pamiątka dziwnych fryzur.",
-  "Absolwent: człowiek wolny.",
-  "Zjazd absolwentów: targowisko próżności.",
-  "Emerytowany nauczyciel: weteran wojny o wiedzę.",
-  "Szkoła: budynek, w którym są ludzie.",
-  "Klasówka: test na spostrzegawczość ściągającego.",
-  "Nauczyciel po kawie: +10 do szybkości.",
-  "Uczeń po dzwonku: teleportacja.",
-  "Zadanie z gwiazdką: pułapka.",
-  "Pytanie retoryczne nauczyciela: nie odpowiadaj!",
-  "Cisza wyborcza: moment przed rozdaniem sprawdzianów.",
-  "Wyniki egzaminów: ruletka.",
-  "Poprawka: druga szansa od losu.",
-  "Warunek: życie na krawędzi.",
-  "Indeks: relikt przeszłości.",
-  "Legitymacja: zniżka na życie.",
-  "Bilet miesięczny: przepustka do szkoły.",
-  "Autobus szkolny: wesoły autobus.",
-  "Droga do szkoły: pod górkę w obie strony.",
-  "Zima stulecia: nadzieja na zamknięcie szkoły.",
-  "Awaria prądu: radość w sali informatycznej.",
-  "Brak kredy: paraliż lekcji.",
-  "Zepsuty rzutnik: powrót do średniowiecza.",
-  "Nowa ławka: luksus.",
-  "Stare krzesło: tortura dla kręgosłupa.",
-  "Tablica korkowa: cmentarzysko ogłoszeń.",
-  "Gablota z pucharami: duma szkoły.",
-  "Sztandar szkoły: świętość.",
-  "Hymn szkoły: pieśń bojowa.",
-  "Patron szkoły: duch opiekuńczy.",
-  "Motto szkoły: pobożne życzenie.",
-  "Statut szkoły: kodeks Hammurabiego.",
-  "Regulamin: zbiór zakazów.",
-  "Prawa ucznia: teoria.",
-  "Obowiązki ucznia: praktyka.",
-  "Samorząd uczniowski: głos ludu.",
-  "Rada pedagogiczna: konklawe.",
-  "Wywiadówka: spowiedź.",
-  "Dzień Wagarowicza: święto lasu.",
-  "Prima Aprilis: dzień bezkarnych żartów.",
-  "Mikołajki: festiwal słodyczy.",
-  "Wigilia klasowa: barszcz z torebki.",
-  "Jasełka: teatr amatorski.",
-  "Karnawał: bal przebierańców.",
-  "Walentynki: dzień anonimowych kartek.",
-  "Dzień Kobiet: tulipan dla pani.",
-  "Dzień Chłopaka: krawat z papieru.",
-  "Dzień Ziemi: sprzątanie świata.",
-  "Dzień Sportu: rywalizacja.",
-  "Dzień Dziecka: lody dla wszystkich.",
-  "Zakończenie roku: wolność!",
-  "Początek wakacji: raj."
-];
-
-const TARGET_DATE = new Date('2026-06-26T00:00:00');
-const PASSWORD = "1Kietlin1";
-
-// --- Components ---
-
-// 1. Funny Quote Component with AI
-const TeacherQuote = () => {
-  const [quote, setQuote] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    // Initial random quote
-    const index = Math.floor(Math.random() * QUOTES.length);
-    setQuote(QUOTES[index]);
-  }, []);
-
-  const handleAIQuote = async () => {
-    setLoading(true);
-    const prompt = "Wymyśl śmieszną, błyskotliwą i krótką (jedno zdanie) sentencję lub żart o nauczycielach, uczniach i życiu szkolnym w Polsce. Niech będzie to coś nowego, czego nie ma w typowych żartach. Tylko treść żartu.";
-    const result = await callGemini(prompt);
-    if (result) {
-      setQuote(result);
-    }
-    setLoading(false);
-  };
-
-  return (
-    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 rounded shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-      <p className="italic text-gray-700 font-serif text-center md:text-left text-lg flex-grow">
-        "{quote}"
-      </p>
-      <button 
-        onClick={handleAIQuote}
-        disabled={loading}
-        className="flex items-center gap-2 px-3 py-1.5 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 rounded-full text-xs font-bold transition shadow-sm whitespace-nowrap"
-      >
-        {loading ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />}
-        {loading ? "Wymyślam..." : "Wymyśl nowy żart (AI)"}
-      </button>
-    </div>
-  );
-};
-
-// 2. Countdown Timer
-const Countdown = () => {
-  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const now = new Date();
-      const difference = TARGET_DATE - now;
-
-      if (difference > 0) {
-        setTimeLeft({
-          days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-          hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
-          minutes: Math.floor((difference / 1000 / 60) % 60),
-          seconds: Math.floor((difference / 1000) % 60),
-        });
-      }
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
-
-  return (
-    <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-4 rounded-xl shadow-lg mb-6 text-center transform hover:scale-[1.01] transition-transform">
-      <h3 className="text-sm uppercase tracking-widest opacity-80 mb-2 font-semibold">Do wakacji (26.06.2026) pozostało:</h3>
-      <div className="flex justify-center gap-4 text-center">
-        {[
-          { label: 'Dni', value: timeLeft.days },
-          { label: 'Godz', value: timeLeft.hours },
-          { label: 'Min', value: timeLeft.minutes },
-          { label: 'Sek', value: timeLeft.seconds }
-        ].map((item, idx) => (
-          <div key={idx} className="flex flex-col items-center">
-            <span className="text-3xl md:text-5xl font-bold font-mono">{item.value}</span>
-            <span className="text-xs md:text-sm text-blue-100">{item.label}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// 3. Calendar View
-const CalendarView = ({ events, onSelectDate }) => {
-  const [currentDate, setCurrentDate] = useState(new Date());
-
-  const daysInMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  const firstDayOfMonth = (date) => {
-    let day = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-    return day === 0 ? 6 : day - 1; // Adjust for Monday start
-  };
-
-  const monthNames = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"];
-
-  const nextMonth = () => {
-    if (currentDate.getFullYear() < 2026 || (currentDate.getFullYear() === 2026 && currentDate.getMonth() < 11)) {
-      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
-    }
-  };
-
-  const prevMonth = () => {
-     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
-  };
-
-  const renderCalendarDays = () => {
-    const days = [];
-    const totalDays = daysInMonth(currentDate);
-    const startDay = firstDayOfMonth(currentDate);
-
-    // Empty cells for previous month
-    for (let i = 0; i < startDay; i++) {
-      days.push(<div key={`empty-${i}`} className="h-10 md:h-14 bg-gray-50 border border-gray-100"></div>);
-    }
-
-    // Days
-    for (let i = 1; i <= totalDays; i++) {
-      const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-      const dayEvents = events.filter(e => {
-        // Simple check if event includes this day
-        return e.startDate <= dateStr && e.endDate >= dateStr;
-      });
-
-      const isToday = new Date().toISOString().split('T')[0] === dateStr;
-      const hasHighlight = dayEvents.some(e => e.isHighlighted);
-
-      days.push(
-        <div 
-          key={i} 
-          className={`h-10 md:h-14 border border-gray-100 p-1 relative hover:bg-blue-50 cursor-pointer transition-colors ${isToday ? 'bg-blue-100 font-bold' : 'bg-white'}`}
-          onClick={() => {
-             // Optional: Filter list by clicking calendar? For now just visual.
-          }}
-        >
-          <span className={`text-sm ${isToday ? 'text-blue-800' : 'text-gray-700'}`}>{i}</span>
-          <div className="flex gap-1 mt-1 flex-wrap content-end">
-            {dayEvents.slice(0, 3).map((_, idx) => (
-              <div key={idx} className={`w-1.5 h-1.5 rounded-full ${hasHighlight ? 'bg-yellow-500' : 'bg-blue-500'}`}></div>
-            ))}
-          </div>
-        </div>
-      );
-    }
-    return days;
-  };
-
-  return (
-    <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200">
-      <div className="bg-gray-800 text-white p-3 flex justify-between items-center">
-        <button onClick={prevMonth} className="hover:bg-gray-700 p-1 rounded"><ChevronLeft size={20}/></button>
-        <span className="font-semibold text-lg">{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</span>
-        <button onClick={nextMonth} className="hover:bg-gray-700 p-1 rounded"><ChevronRight size={20}/></button>
-      </div>
-      <div className="grid grid-cols-7 text-center text-xs font-semibold text-gray-500 bg-gray-50 py-2 border-b">
-        <div>Pn</div><div>Wt</div><div>Śr</div><div>Cz</div><div>Pt</div><div>Sb</div><div>Nd</div>
-      </div>
-      <div className="grid grid-cols-7">
-        {renderCalendarDays()}
-      </div>
-    </div>
-  );
-};
-
-// 4. Main App Component
-export default function App() {
-  const [events, setEvents] = useState([]);
-  const [user, setUser] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isPassModalOpen, setIsPassModalOpen] = useState(false);
-  const [editingEvent, setEditingEvent] = useState(null);
-  
-  // Auth & Data fetching
-  useEffect(() => {
-    const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else {
-        await signInAnonymously(auth);
-      }
-    };
-    initAuth();
-
-    const unsubscribeAuth = onAuthStateChanged(auth, (u) => setUser(u));
-    return () => unsubscribeAuth();
-  }, []);
-
-  useEffect(() => {
-    if (!user) return;
-    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'events'), orderBy('startDate', 'asc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const loadedEvents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setEvents(loadedEvents);
-    }, (error) => console.error("Error fetching events:", error));
-    return () => unsubscribe();
-  }, [user]);
-
-  // Derived state for sorting events
-  const { upcomingEvents, futureEvents } = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    const nextWeek = new Date();
-    nextWeek.setDate(nextWeek.getDate() + 7);
-    const nextWeekStr = nextWeek.toISOString().split('T')[0];
-
-    const upcoming = [];
-    const future = [];
-
-    events.forEach(event => {
-      if (event.endDate < today) return; // Past event
-      if (event.startDate <= nextWeekStr) {
-        upcoming.push(event);
-      } else {
-        future.push(event);
-      }
-    });
-
-    return { upcomingEvents: upcoming, futureEvents: future };
-  }, [events]);
-
-  // Handlers
-  const handleAddClick = () => {
-    setEditingEvent(null);
-    setIsPassModalOpen(true);
-  };
-
-  const handleEditClick = (event) => {
-    setEditingEvent(event);
-    setIsPassModalOpen(true);
-  };
-
-  const handlePasswordSuccess = () => {
-    setIsPassModalOpen(false);
-    setIsModalOpen(true);
-  };
-
-  const handleDelete = async (id) => {
-     const pass = prompt("Podaj hasło, aby usunąć:");
-     if (pass === PASSWORD) {
-       try {
-         await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id));
-       } catch (e) {
-         alert("Błąd usuwania");
-       }
-     } else if (pass) {
-       alert("Złe hasło");
-     }
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-100 font-sans text-slate-800">
-      {/* --- HEADER --- */}
-      <header className="bg-white border-b-4 border-blue-600 shadow-md sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <img 
-              src="https://www.dropbox.com/scl/fi/s5xoh3esj0actj0s5upin/logo-bez-tla.png?rlkey=7kcdex9mud7rcj2tn3olqubh9&st=9gfv0dbw&dl=1" 
-              alt="Logo Szkoły" 
-              className="h-12 md:h-16 w-auto drop-shadow-sm"
-              onError={(e) => {e.target.style.display = 'none'}} // Fallback if image fails
-            />
-            <div>
-              <h1 className="text-xl md:text-3xl font-bold text-slate-800 tracking-tight">Co w najbliższym czasie</h1>
-              <p className="text-xs md:text-sm text-slate-500 flex items-center gap-2">
-                <Clock size={14} />
-                {new Date().toLocaleDateString('pl-PL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute:'2-digit' })}
-              </p>
-            </div>
-          </div>
-          <button 
-            onClick={handleAddClick}
-            className="bg-blue-600 hover:bg-blue-700 text-white p-2 md:px-4 md:py-2 rounded-full shadow transition flex items-center gap-2"
-          >
-            <Plus size={20} />
-            <span className="hidden md:inline">Dodaj Wydarzenie</span>
-          </button>
-        </div>
-      </header>
-
-      <main className="max-w-6xl mx-auto px-4 py-6">
-        
-        <Countdown />
-        <TeacherQuote />
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* --- LEFT COLUMN: EVENTS LIST --- */}
-          <div className="lg:col-span-2 space-y-8">
-            
-            {/* Upcoming Section */}
-            <section>
-              <h2 className="text-2xl font-bold text-blue-800 mb-4 flex items-center gap-2 border-b-2 border-blue-200 pb-2">
-                <AlertCircle className="text-blue-600" />
-                Najbliższy Tydzień
-              </h2>
-              {upcomingEvents.length === 0 ? (
-                <p className="text-gray-500 italic ml-4">Brak wydarzeń w najbliższym czasie.</p>
-              ) : (
-                <div className="space-y-4">
-                  {upcomingEvents.map(event => (
-                    <EventCard 
-                      key={event.id} 
-                      event={event} 
-                      onEdit={() => handleEditClick(event)} 
-                      onDelete={() => handleDelete(event.id)}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* Future Section */}
-            <section>
-              <h2 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2 border-b-2 border-gray-200 pb-2">
-                <Calendar className="text-gray-500" />
-                Późniejsze Terminy
-              </h2>
-              {futureEvents.length === 0 ? (
-                <p className="text-gray-500 italic ml-4">Kalendarz na razie pusty.</p>
-              ) : (
-                <div className="space-y-4">
-                  {futureEvents.map(event => (
-                    <EventCard 
-                      key={event.id} 
-                      event={event} 
-                      isCompact 
-                      onEdit={() => handleEditClick(event)}
-                      onDelete={() => handleDelete(event.id)}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
-          </div>
-
-          {/* --- RIGHT COLUMN: CALENDAR --- */}
-          <div className="lg:col-span-1">
-             <div className="sticky top-24">
-                <h2 className="text-lg font-bold text-gray-700 mb-2">Przegląd Miesiąca</h2>
-                <CalendarView events={events} />
-                
-                <div className="mt-6 bg-white p-4 rounded-xl shadow border border-gray-200">
-                  <h3 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
-                    <MapPin size={16} /> Szkoła Podstawowa
-                  </h3>
-                  <p className="text-sm text-gray-600">
-                    Terminarz uwzględnia wszystkie wydarzenia szkolne, akademie, sprawdziany i dni wolne zatwierdzone przez dyrekcję.
-                  </p>
-                </div>
-             </div>
-          </div>
-
-        </div>
-      </main>
-
-      {/* --- FOOTER --- */}
-      <footer className="bg-slate-800 text-slate-300 py-6 mt-12 text-center text-sm space-y-1">
-        <p className="font-medium">Grzegorz Ciepielewski - PSP Kietlin</p>
-        <p className="opacity-60 text-xs">© 2026 Wszelkie prawa zastrzeżone</p>
-      </footer>
-
-      {/* --- MODALS --- */}
-      {isPassModalOpen && (
-        <PasswordModal 
-          onClose={() => setIsPassModalOpen(false)} 
-          onSuccess={handlePasswordSuccess} 
-        />
-      )}
-
-      {isModalOpen && (
-        <EventModal 
-          event={editingEvent} 
-          onClose={() => setIsModalOpen(false)} 
-          userId={user?.uid}
-        />
-      )}
-    </div>
-  );
-}
-
-// --- Helper Components ---
-
-const EventCard = ({ event, isCompact, onEdit, onDelete }) => {
-  const isHighlighted = event.isHighlighted;
-  
-  const formatDate = (dateStr) => {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' });
-  };
-
-  return (
-    <div className={`relative bg-white rounded-lg shadow-sm border transition-all hover:shadow-md 
-      ${isHighlighted ? 'border-l-8 border-l-yellow-400 border-t-yellow-100 border-r-yellow-100 border-b-yellow-100 bg-yellow-50/30' : 'border-l-4 border-l-blue-500 border-gray-100'} 
-      p-4 flex flex-col md:flex-row gap-4`}>
-      
-      {/* Date Box */}
-      <div className="flex-shrink-0 flex flex-row md:flex-col items-center justify-center bg-gray-50 rounded p-2 min-w-[80px] border border-gray-100">
-         <span className="text-2xl font-bold text-slate-700">{new Date(event.startDate).getDate()}</span>
-         <span className="text-xs uppercase text-slate-500 font-semibold ml-2 md:ml-0">{new Date(event.startDate).toLocaleDateString('pl-PL', {month: 'short'})}</span>
-      </div>
-
-      {/* Content */}
-      <div className="flex-grow">
-        <div className="flex justify-between items-start">
-          <h3 className={`font-bold text-lg ${isHighlighted ? 'text-slate-900' : 'text-slate-800'}`}>
-             {event.title}
-          </h3>
-          <div className="flex gap-2">
-            <button onClick={onEdit} className="text-gray-400 hover:text-blue-600 p-1"><Edit2 size={16} /></button>
-            <button onClick={onDelete} className="text-gray-400 hover:text-red-600 p-1"><Trash2 size={16} /></button>
-          </div>
-        </div>
-        
-        <div className="text-sm text-gray-500 mt-1 flex flex-wrap gap-3">
-           <span className="flex items-center gap-1">
-             <Clock size={14} />
-             {event.isAllDay ? 'Cały dzień' : `${event.startTime} - ${event.endTime}`}
-           </span>
-           {event.startDate !== event.endDate && (
-             <span className="bg-gray-100 px-2 py-0.5 rounded text-xs">
-               Do {formatDate(event.endDate)}
-             </span>
-           )}
-        </div>
-        
-        {event.description && (
-          <p className="mt-2 text-gray-600 text-sm leading-relaxed whitespace-pre-line">
-            {event.description}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-};
-
-const PasswordModal = ({ onClose, onSuccess }) => {
-  const [input, setInput] = useState("");
-  const [error, setError] = useState(false);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (input === PASSWORD) {
-      onSuccess();
-    } else {
-      setError(true);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-in fade-in zoom-in duration-200">
-        <h3 className="text-lg font-bold mb-4 text-center">Weryfikacja Nauczyciela</h3>
-        <form onSubmit={handleSubmit}>
-          <input 
-            type="password" 
-            placeholder="Podaj hasło" 
-            className="w-full border rounded p-2 mb-2 focus:ring-2 focus:ring-blue-500 outline-none"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            autoFocus
-          />
-          {error && <p className="text-red-500 text-xs mb-3">Nieprawidłowe hasło!</p>}
-          <div className="flex gap-2 justify-end mt-4">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Anuluj</button>
-            <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">OK</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-const EventModal = ({ event, onClose, userId }) => {
-  const [formData, setFormData] = useState({
-    title: '',
-    startDate: new Date().toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0],
-    startTime: '08:00',
-    endTime: '09:00',
-    isAllDay: false,
-    isHighlighted: false,
-    description: ''
-  });
-  const [saving, setSaving] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
-
-  useEffect(() => {
-    if (event) {
-      setFormData(event);
-    }
-  }, [event]);
-
-  const handleAIEnhance = async () => {
-    if (!formData.title) {
-      alert("Wpisz najpierw tytuł wydarzenia!");
-      return;
-    }
-    setAiLoading(true);
-    const prompt = `Jesteś sekretarką w szkole podstawowej. Napisz krótki (max 3 zdania), profesjonalny i zachęcający opis wydarzenia szkolnego o tytule: "${formData.title}". 
-    Dodatkowe informacje, które możesz (ale nie musisz) wykorzystać, jeśli pasują: "${formData.description}". 
-    Opis ma być gotowy do wklejenia na stronę internetową szkoły. Użyj języka polskiego.`;
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Szkolny Terminarz - PSP Kietlin</title>
+    <!-- Biblioteki zewnętrzne -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    const result = await callGemini(prompt);
-    if (result) {
-      setFormData(prev => ({ ...prev, description: result }));
-    }
-    setAiLoading(false);
-  };
+    <!-- Lucide Icons - Używamy biblioteki lucide bezpośrednio -->
+    <script src="https://unpkg.com/lucide@0.321.0/dist/umd/lucide.min.js"></script>
+    
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if(!userId) return;
-    setSaving(true);
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+    <div id="root"></div>
 
-    try {
-      const dataToSave = {
-        ...formData,
-        updatedAt: new Date().toISOString()
-      };
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
 
-      if (event) {
-        // Update
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', event.id), dataToSave);
-      } else {
-        // Create
-        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), {
-           ...dataToSave,
-           createdAt: new Date().toISOString(),
-           createdBy: userId
-        });
-      }
-      onClose();
-    } catch (error) {
-      console.error("Error saving:", error);
-      alert("Wystąpił błąd podczas zapisu.");
-    } finally {
-      setSaving(false);
-    }
-  };
+        // --- KONFIGURACJA FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "",
+            authDomain: "",
+            projectId: "",
+            storageBucket: "",
+            messagingSenderId: "",
+            appId: ""
+        };
 
-  return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
-        <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
-          <h3 className="font-bold text-lg text-slate-800">{event ? 'Edytuj Wydarzenie' : 'Dodaj Nowe Wydarzenie'}</h3>
-          <button onClick={onClose}><X size={24} className="text-gray-400 hover:text-red-500" /></button>
-        </div>
-        
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nazwa wydarzenia</label>
-            <input 
-              required 
-              className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-              value={formData.title}
-              onChange={e => setFormData({...formData, title: e.target.value})}
-              placeholder="np. Apel z okazji 3 Maja"
-            />
-          </div>
+        let db = null;
+        if (firebaseConfig.apiKey) {
+            try {
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(firebaseConfig);
+                }
+                db = firebase.firestore();
+            } catch (err) {
+                console.error("Firebase init error:", err);
+            }
+        }
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Data rozpoczęcia</label>
-              <input 
-                type="date"
-                required 
-                className="w-full border border-gray-300 rounded-lg p-2"
-                value={formData.startDate}
-                onChange={e => setFormData({...formData, startDate: e.target.value})}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Data zakończenia</label>
-              <input 
-                type="date"
-                required 
-                className="w-full border border-gray-300 rounded-lg p-2"
-                value={formData.endDate}
-                onChange={e => setFormData({...formData, endDate: e.target.value})}
-              />
-            </div>
-          </div>
+        const TARGET_DATE = new Date('2026-06-26T00:00:00');
+        const ADMIN_PASSWORD = "1Kietlin1";
 
-          <div className="flex items-center gap-2 py-2">
-            <input 
-              type="checkbox" 
-              id="allDay"
-              className="w-4 h-4 text-blue-600 rounded"
-              checked={formData.isAllDay}
-              onChange={e => setFormData({...formData, isAllDay: e.target.checked})}
-            />
-            <label htmlFor="allDay" className="text-sm text-gray-700 select-none">Wydarzenie całodniowe (bez godzin)</label>
-          </div>
+        // Komponent ikony kompatybilny z UMD Lucide
+        const LucideIcon = ({ name, size = 20, className = "" }) => {
+            const iconRef = useRef(null);
 
-          {!formData.isAllDay && (
-            <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-2 duration-200">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Godzina rozpoczęcia</label>
-                <input 
-                  type="time"
-                  required 
-                  className="w-full border border-gray-300 rounded-lg p-2"
-                  value={formData.startTime}
-                  onChange={e => setFormData({...formData, startTime: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Godzina zakończenia</label>
-                <input 
-                  type="time"
-                  required 
-                  className="w-full border border-gray-300 rounded-lg p-2"
-                  value={formData.endTime}
-                  onChange={e => setFormData({...formData, endTime: e.target.value})}
-                />
-              </div>
-            </div>
-          )}
+            useEffect(() => {
+                if (iconRef.current) {
+                    // Czyścimy poprzednią zawartość
+                    iconRef.current.innerHTML = '';
+                    // Tworzymy nową ikonę za pomocą API lucide
+                    const iconElement = lucide.createIcons({
+                        icons: {
+                            [name]: lucide.icons[name]
+                        },
+                        attrs: {
+                            width: size,
+                            height: size,
+                            class: className
+                        }
+                    });
+                    
+                    // Lucide w wersji UMD wstawia ikony do elementów z data-lucide
+                    const i = document.createElement('i');
+                    i.setAttribute('data-lucide', name);
+                    iconRef.current.appendChild(i);
+                    lucide.createIcons();
+                }
+            }, [name, size, className]);
 
-          <div>
-             <div className="flex justify-between items-center mb-1">
-               <label className="block text-sm font-medium text-gray-700">Opis (opcjonalnie)</label>
-               <button 
-                 type="button" 
-                 onClick={handleAIEnhance}
-                 disabled={aiLoading}
-                 className="text-xs bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-2 py-1 rounded-md flex items-center gap-1 hover:opacity-90 transition disabled:opacity-50"
-               >
-                 {aiLoading ? <Loader2 size={12} className="animate-spin"/> : <Sparkles size={12} />}
-                 {aiLoading ? "Generuję..." : "Ulepsz opis z AI"}
-               </button>
-             </div>
-             <textarea 
-               className="w-full border border-gray-300 rounded-lg p-2 h-24 resize-none focus:ring-2 focus:ring-blue-500 outline-none"
-               value={formData.description}
-               onChange={e => setFormData({...formData, description: e.target.value})}
-               placeholder="Wpisz słowa kluczowe (np. sala 4, strój galowy) i kliknij przycisk AI, aby rozwinąć opis..."
-             />
-          </div>
+            return <span ref={iconRef} className="inline-flex items-center justify-center"></span>;
+        };
 
-          <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
-            <div className="flex items-center gap-2">
-              <input 
-                type="checkbox" 
-                id="highlight"
-                className="w-4 h-4 text-yellow-600 rounded border-gray-300 focus:ring-yellow-500"
-                checked={formData.isHighlighted}
-                onChange={e => setFormData({...formData, isHighlighted: e.target.checked})}
-              />
-              <label htmlFor="highlight" className="text-sm font-bold text-gray-800 select-none cursor-pointer">Wyróżnij to wydarzenie (kolor żółty)</label>
-            </div>
-            <p className="text-xs text-gray-500 mt-1 ml-6">Użyj dla ważnych świąt i egzaminów.</p>
-          </div>
-          
-          <div className="pt-4 flex justify-end gap-3">
-            <button 
-              type="button" 
-              onClick={onClose}
-              className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg transition"
-            >
-              Anuluj
-            </button>
-            <button 
-              type="submit" 
-              disabled={saving}
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-md hover:shadow-lg transition flex items-center gap-2 disabled:opacity-50"
-            >
-              {saving ? 'Zapisywanie...' : <><Save size={18} /> Zapisz</>}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
+        function App() {
+            const [events, setEvents] = useState([]);
+            const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+            const [isAdmin, setIsAdmin] = useState(false);
+            const [showLogin, setShowLogin] = useState(false);
+            const [showModal, setShowModal] = useState(false);
+            const [editingEvent, setEditingEvent] = useState(null);
+
+            useEffect(() => {
+                const timer = setInterval(() => {
+                    const now = new Date();
+                    const diff = TARGET_DATE - now;
+                    if (diff > 0) {
+                        setTimeLeft({
+                            days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+                            hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+                            minutes: Math.floor((diff / 1000 / 60) % 60),
+                            seconds: Math.floor((diff / 1000) % 60),
+                        });
+                    }
+                }, 1000);
+                return () => clearInterval(timer);
+            }, []);
+
+            useEffect(() => {
+                if (db) {
+                    const unsubscribe = db.collection('events').orderBy('date', 'asc')
+                        .onSnapshot(snapshot => {
+                            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            setEvents(data);
+                        }, err => console.error("Firestore error:", err));
+                    return () => unsubscribe();
+                } else {
+                    setEvents([
+                        { id: '1', title: 'Przykładowy egzamin', date: '2025-05-15', description: 'To jest przykład. Podłącz Firebase, aby zapisywać własne wydarzenia.', isHigh: true }
+                    ]);
+                }
+            }, []);
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                const pass = e.target.password.value;
+                if (pass === ADMIN_PASSWORD) {
+                    setIsAdmin(true);
+                    setShowLogin(false);
+                } else {
+                    alert("Błędne hasło!");
+                }
+            };
+
+            const saveEvent = async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const eventData = {
+                    title: formData.get('title'),
+                    date: formData.get('date'),
+                    description: formData.get('description'),
+                    isHigh: formData.get('isHigh') === 'on'
+                };
+
+                if (db) {
+                    try {
+                        if (editingEvent) {
+                            await db.collection('events').doc(editingEvent.id).update(eventData);
+                        } else {
+                            await db.collection('events').add(eventData);
+                        }
+                        setShowModal(false);
+                        setEditingEvent(null);
+                    } catch (err) {
+                        alert("Błąd zapisu: " + err.message);
+                    }
+                } else {
+                    alert("Tryb podglądu. Skonfiguruj Firebase w kodzie.");
+                    setShowModal(false);
+                }
+            };
+
+            const deleteEvent = async (id) => {
+                if (confirm("Czy na pewno usunąć?") && db) {
+                    await db.collection('events').doc(id).delete();
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col pb-12">
+                    <header className="bg-white border-b-4 border-blue-600 shadow-sm sticky top-0 z-10">
+                        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-blue-600 p-2 rounded-lg text-white flex items-center justify-center">
+                                    <LucideIcon name="calendar" size={24} />
+                                </div>
+                                <div>
+                                    <h1 className="text-xl font-bold leading-tight">Terminarz Szkolny</h1>
+                                    <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">PSP Kietlin</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                {isAdmin ? (
+                                    <button onClick={() => {setEditingEvent(null); setShowModal(true)}} className="bg-blue-600 text-white px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 hover:bg-blue-700 shadow-md">
+                                        <LucideIcon name="plus" size={16} /> Dodaj
+                                    </button>
+                                ) : (
+                                    <button onClick={() => setShowLogin(true)} className="text-slate-400 hover:text-blue-600 p-2 transition flex items-center">
+                                        <LucideIcon name="lock" size={20} />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="max-w-5xl w-full mx-auto px-4 mt-6 space-y-8">
+                        <div className="bg-gradient-to-br from-blue-700 to-indigo-800 text-white p-6 rounded-3xl shadow-xl">
+                            <h2 className="text-center text-xs uppercase tracking-[0.2em] mb-4 opacity-70">Do wakacji 2026 pozostało</h2>
+                            <div className="flex justify-center gap-4 md:gap-8">
+                                {[
+                                    {v: timeLeft.days, l: 'Dni'},
+                                    {v: timeLeft.hours, l: 'Godz'},
+                                    {v: timeLeft.minutes, l: 'Min'},
+                                    {v: timeLeft.seconds, l: 'Sek'}
+                                ].map((t, i) => (
+                                    <div key={i} className="text-center">
+                                        <div className="text-3xl md:text-5xl font-black font-mono">{String(t.v).padStart(2, '0')}</div>
+                                        <div className="text-[10px] uppercase opacity-60 mt-1 font-bold">{t.l}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <h2 className="text-lg font-bold flex items-center gap-2 text-slate-700">
+                                <LucideIcon name="clock" size={18} className="text-blue-600" /> Najbliższe wydarzenia
+                            </h2>
+                            {events.length === 0 ? (
+                                <div className="bg-white p-8 rounded-2xl border-2 border-dashed border-slate-200 text-center text-slate-400">
+                                    Brak zaplanowanych wydarzeń.
+                                </div>
+                            ) : (
+                                <div className="grid gap-3">
+                                    {events.map(event => (
+                                        <div key={event.id} className={`bg-white p-4 rounded-xl shadow-sm border-l-4 flex justify-between items-center ${event.isHigh ? 'border-l-orange-500' : 'border-l-blue-500'}`}>
+                                            <div className="flex gap-4 items-center">
+                                                <div className="text-center min-w-[50px]">
+                                                    <div className="text-xl font-bold text-slate-800">{new Date(event.date).getDate()}</div>
+                                                    <div className="text-[10px] uppercase font-bold text-slate-400">{new Date(event.date).toLocaleDateString('pl-PL', {month: 'short'})}</div>
+                                                </div>
+                                                <div>
+                                                    <h3 className="font-bold text-slate-800">{event.title}</h3>
+                                                    <p className="text-xs text-slate-500">{event.description}</p>
+                                                </div>
+                                            </div>
+                                            {isAdmin && (
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => {setEditingEvent(event); setShowModal(true)}} className="p-2 text-slate-400 hover:text-blue-600 flex items-center"><LucideIcon name="pencil" size={16}/></button>
+                                                    <button onClick={() => deleteEvent(event.id)} className="p-2 text-slate-400 hover:text-red-600 flex items-center"><LucideIcon name="trash-2" size={16}/></button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </main>
+
+                    <footer className="bg-slate-900 text-slate-400 py-10 mt-auto text-center px-4">
+                        <div className="max-w-4xl mx-auto space-y-3">
+                            <p className="text-white font-bold text-lg tracking-tight">Grzegorz Ciepielewski - PSP Kietlin</p>
+                            <div className="flex justify-center gap-4 text-xs opacity-50">
+                                <span>Wszelkie prawa zastrzeżone</span>
+                                <span>•</span>
+                                <span>© 2026</span>
+                            </div>
+                        </div>
+                    </footer>
+
+                    {showLogin && (
+                        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+                                <h3 className="text-lg font-bold mb-4">Panel Nauczyciela</h3>
+                                <form onSubmit={handleLogin} className="space-y-4">
+                                    <input name="password" type="password" placeholder="Hasło" className="w-full border rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-600" autoFocus />
+                                    <div className="flex gap-2">
+                                        <button type="button" onClick={() => setShowLogin(false)} className="flex-1 py-3 text-slate-500 font-bold">Anuluj</button>
+                                        <button type="submit" className="flex-1 bg-blue-600 text-white rounded-xl py-3 font-bold shadow-lg shadow-blue-200">Zaloguj</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {showModal && (
+                        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md overflow-y-auto max-h-[90vh]">
+                                <h3 className="text-lg font-bold mb-4">{editingEvent ? 'Edytuj' : 'Dodaj'} wydarzenie</h3>
+                                <form onSubmit={saveEvent} className="space-y-4">
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-400 uppercase">Tytuł</label>
+                                        <input name="title" defaultValue={editingEvent?.title} className="w-full border rounded-xl p-3 mt-1" required />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-400 uppercase">Data</label>
+                                        <input name="date" type="date" defaultValue={editingEvent?.date} className="w-full border rounded-xl p-3 mt-1" required />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-400 uppercase">Opis</label>
+                                        <textarea name="description" defaultValue={editingEvent?.description} className="w-full border rounded-xl p-3 h-24 mt-1" />
+                                    </div>
+                                    <div className="flex items-center gap-2 px-2">
+                                        <input type="checkbox" name="isHigh" defaultChecked={editingEvent?.isHigh} id="isHigh" className="w-4 h-4 rounded" />
+                                        <label htmlFor="isHigh" className="text-sm font-bold text-orange-600">Wyróżnij wydarzenie</label>
+                                    </div>
+                                    <div className="flex gap-2 pt-2">
+                                        <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-3 text-slate-500 font-bold">Anuluj</button>
+                                        <button type="submit" className="flex-1 bg-blue-600 text-white rounded-xl py-3 font-bold shadow-lg shadow-blue-200">Zapisz</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
