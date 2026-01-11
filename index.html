@@ -1,0 +1,757 @@
+<!doctype html>
+<html lang="pl" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terminarz Wydarzeń</title>
+  <script src="/_sdk/data_sdk.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&amp;display=swap" rel="stylesheet">
+  <style>
+    body {
+      box-sizing: border-box;
+      font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    
+    .event-card {
+      transition: all 0.3s ease;
+    }
+    
+    .event-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+    }
+    
+    .highlighted-event {
+      animation: pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3); }
+      50% { box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5); }
+    }
+    
+    .modal-backdrop {
+      animation: fadeIn 0.2s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    .modal-content {
+      animation: slideUp 0.3s ease;
+    }
+    
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    
+    .fab-button {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      transition: all 0.3s ease;
+    }
+    
+    .fab-button:hover {
+      transform: scale(1.1);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+    
+    .countdown-box {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    .loading-spinner {
+      border: 3px solid rgba(99, 102, 241, 0.1);
+      border-top: 3px solid #6366f1;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .logo-img {
+      max-width: 100px;
+      height: auto;
+      object-fit: contain;
+    }
+    
+    @media (max-width: 640px) {
+      .logo-img {
+        max-width: 70px;
+      }
+    }
+    
+    .quote-box {
+      background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+      animation: fadeIn 0.5s ease;
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+ </head>
+ <body class="h-full">
+  <div id="app" class="w-full h-full bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 overflow-auto">
+   <div class="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8"><!-- Header -->
+    <header class="text-center mb-8">
+     <div class="flex items-center justify-center gap-4 mb-4 flex-wrap"><img src="https://www.dropbox.com/scl/fi/s5xoh3esj0actj0s5upin/logo-bez-tla.png?rlkey=7kcdex9mud7rcj2tn3olqubh9&amp;st=9gfv0dbw&amp;dl=1" alt="Logo szkoły" class="logo-img" onerror="this.style.display='none'; this.alt='Logo niedostępne';">
+      <h1 id="mainTitle" class="text-4xl sm:text-5xl font-bold text-gray-800"></h1>
+     </div><!-- Teacher Quote -->
+     <div class="quote-box rounded-lg shadow-lg p-4 mb-4 max-w-2xl mx-auto">
+      <p id="teacherQuote" class="text-lg text-white font-semibold italic">📚 "Ładuję sentencję..."</p>
+     </div>
+     <div class="bg-white rounded-lg shadow-md p-4 mb-4 inline-block">
+      <p id="currentDateTime" class="text-lg text-gray-700 font-semibold"></p>
+     </div><!-- Countdown to Vacation -->
+     <div class="countdown-box rounded-xl shadow-lg p-6 text-white max-w-md mx-auto">
+      <p id="vacationLabel" class="text-xl font-semibold mb-2"></p>
+      <div class="flex justify-center gap-4 flex-wrap">
+       <div class="text-center">
+        <div id="daysLeft" class="text-4xl font-bold">
+         -
+        </div>
+        <div class="text-sm opacity-90">
+         dni
+        </div>
+       </div>
+       <div class="text-center">
+        <div id="hoursLeft" class="text-4xl font-bold">
+         -
+        </div>
+        <div class="text-sm opacity-90">
+         godzin
+        </div>
+       </div>
+       <div class="text-center">
+        <div id="minutesLeft" class="text-4xl font-bold">
+         -
+        </div>
+        <div class="text-sm opacity-90">
+         minut
+        </div>
+       </div>
+       <div class="text-center">
+        <div id="secondsLeft" class="text-4xl font-bold">
+         -
+        </div>
+        <div class="text-sm opacity-90">
+         sekund
+        </div>
+       </div>
+      </div>
+     </div>
+    </header><!-- Events Section -->
+    <section>
+     <div id="upcomingWeekSection" class="mb-8">
+      <h2 class="text-2xl font-bold text-indigo-700 mb-4 flex items-center gap-2"><span>🔥</span> <span>Nadchodzący tydzień</span></h2>
+      <div id="upcomingWeekEvents" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      </div>
+      <p id="noUpcomingEvents" class="text-gray-500 italic hidden">Brak wydarzeń w najbliższym tygodniu</p>
+     </div>
+     <div id="laterEventsSection" class="mb-8">
+      <h2 class="text-2xl font-bold text-purple-700 mb-4 flex items-center gap-2"><span>📅</span> <span>Kolejne wydarzenia</span></h2>
+      <div id="laterEvents" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      </div>
+      <p id="noLaterEvents" class="text-gray-500 italic hidden">Brak późniejszych wydarzeń</p>
+     </div>
+    </section>
+   </div><!-- Floating Action Button --> <button id="fabButton" class="fab-button fixed bottom-8 right-8 w-16 h-16 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center text-2xl z-50"> ✏️ </button> <!-- Add Event Modal -->
+   <div id="addEventModal" class="modal-backdrop fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
+    <div class="modal-content bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+     <div class="flex justify-between items-center mb-4">
+      <h3 id="modalTitle" class="text-2xl font-bold text-gray-800">Dodaj wydarzenie</h3><button id="closeModal" class="text-gray-500 hover:text-gray-700 text-2xl">×</button>
+     </div>
+     <form id="eventForm">
+      <div id="passwordSection" class="mb-4"><label for="password" class="block text-sm font-semibold text-gray-700 mb-2">Hasło:</label> <input type="password" id="password" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="Wprowadź hasło">
+       <p id="passwordError" class="text-red-500 text-sm mt-1 hidden">Nieprawidłowe hasło!</p>
+      </div>
+      <div id="eventFieldsSection" class="hidden">
+       <div class="mb-4"><label for="eventTitle" class="block text-sm font-semibold text-gray-700 mb-2">Tytuł wydarzenia:</label> <input type="text" id="eventTitle" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="Np. Spotkanie zespołu">
+       </div>
+       <div class="mb-4"><label for="eventDate" class="block text-sm font-semibold text-gray-700 mb-2">Data rozpoczęcia:</label> <input type="date" id="eventDate" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+       </div>
+       <div class="mb-4"><label for="eventEndDate" class="block text-sm font-semibold text-gray-700 mb-2">Data zakończenia (opcjonalnie):</label> <input type="date" id="eventEndDate" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+        <p class="text-xs text-gray-500 mt-1">Pozostaw puste dla wydarzenia jednodniowego</p>
+       </div>
+       <div class="mb-4"><label for="eventTime" class="block text-sm font-semibold text-gray-700 mb-2">Godzina:</label> <input type="time" id="eventTime" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+       </div>
+       <div class="mb-4"><label for="eventDescription" class="block text-sm font-semibold text-gray-700 mb-2">Opis (opcjonalnie):</label> <textarea id="eventDescription" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="Dodatkowe informacje..."></textarea>
+       </div>
+       <div class="mb-4"><label class="flex items-center gap-2 cursor-pointer"> <input type="checkbox" id="eventHighlight" class="w-5 h-5 text-amber-600 border-gray-300 rounded focus:ring-2 focus:ring-amber-500"> <span class="text-sm font-semibold text-gray-700">⭐ Wyróżnij wydarzenie (złoty kolor)</span> </label>
+       </div><button type="submit" id="submitButton" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"> <span>Dodaj wydarzenie</span> </button>
+      </div><button type="button" id="verifyPasswordButton" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"> Sprawdź hasło </button>
+     </form>
+    </div>
+   </div>
+  </div>
+  <script>
+    const CORRECT_PASSWORD = '1Kietlin1';
+    const VACATION_DATE = new Date('2026-06-26T00:00:00');
+    const END_OF_YEAR = new Date('2026-12-31T23:59:59');
+    
+    const TEACHER_QUOTES = [
+      "Kawa to nie tylko napój, to także metoda przetrwania do przerwy.",
+      "Cisza w klasie to jak jednorożec - wszyscy o nim słyszeli, nikt go nie widział.",
+      "Moje ulubione ćwiczenie? Bieganie po schodach, gdy dzwonek już dzwoni.",
+      "Nauczyciel: jedyny zawód, w którym kradniesz rzeczy z domu do pracy.",
+      "Weekend nauczyciela: sobota na sprawdzanie, niedziela na planowanie.",
+      "Marzenie nauczyciela: cisza, kawa i sprawdzone zeszyty... w tej kolejności.",
+      "Najlepsza część lekcji? Dzwonek na przerwę.",
+      "Dlaczego nauczyciele są jak magicy? Bo znikają na przerwie!",
+      "Nauczyciel na wakacjach wciąż liczy do trzech przed wybuchem.",
+      "Dni do wakacji liczę szybciej niż uczniowie.",
+      "Mój głos ma trzy poziomy: normalny, nauczycielski i 'CICHO!'",
+      "Kawa i cierpliwość - zestaw startowy każdego nauczyciela.",
+      "Przerwa to czas, gdy nauczyciel biega bardziej niż uczniowie.",
+      "Najdłuższy tydzień? Ten przed wakacjami.",
+      "Nauczyciel wie wszystko, a jak nie wie, to i tak udaje.",
+      "Moja supermoc? Widzę wszystko, nawet gdy piszę na tablicy.",
+      "Dzień nauczyciela zaczyna się kawą, kończy pytaniem 'co było zadane?'",
+      "Czasami zastanawiam się, kto się więcej nauczy - oni czy ja.",
+      "Sprawdzanie testów to jak horror - wiesz, że będzie źle, ale i tak patrzysz.",
+      "Nauczyciel to jedyna osoba szczęśliwa w poniedziałek... po wakacjach.",
+      "Marzenie: klasa pełna dzieci, które odrabiają pracę domową.",
+      "Najkrótszy miesiąc? Czerwiec dla uczniów, wrzesień dla nauczycieli.",
+      "Mój sekret? Trzy kawy dziennie i niezłomna wiara w wakacje.",
+      "Pierwsze słowa nauczyciela rano? 'Gdzie moja kawa?'",
+      "Nauczyciel to mistrz improwizacji, gdy zabraknie kredy.",
+      "Lekcja wychowania fizycznego = mój trening cardio.",
+      "Najgłośniejszy dźwięk w szkole? Krzesła podczas przesuwania.",
+      "Klasówka: jedyna sytuacja, gdy wszyscy chcą ciszy.",
+      "Nauczyciel marzy o klasie pełnej, ale cichej... paradoks!",
+      "Weekend nauczyciela to mit miejski.",
+      "Moje hobby? Zbieranie długopisów, które 'zniknęły'.",
+      "Najlepszy dzień? Piątek po ostatniej lekcji.",
+      "Nauczyciel nie krzyczy, podnosi tylko głos... do jedenastej potęgi.",
+      "Moja dieta? Kawa, stres i kolejna kawa.",
+      "Szczęście to pełna frekwencja i sprawdzone prace.",
+      "Najdłuższa minuta? Ostatnia przed dzwonkiem.",
+      "Nauczyciel: expert w mówieniu do ściany... i tablicy.",
+      "Przerwa kawowa to nie przywilej, to konieczność!",
+      "Marzę o ciszy, ale wiem, że to nierealne.",
+      "Najlepsze pytanie ucznia? To, które pokazuje, że słuchał.",
+      "Nauczyciel ma oczy dookoła głowy. To pewnik.",
+      "Dni do wakacji liczę precyzyjniej niż matematyk.",
+      "Mój plan lekcji to sztuka improwizacji.",
+      "Kawa przed lekcją = przetrwanie gwarantowane.",
+      "Najgorszy koszmar? Zgubiony dziennik.",
+      "Nauczyciel w piątek o 15:00 = najszczęśliwsza osoba na ziemi.",
+      "Moje wakacje = czas, gdy nie liczę do trzech.",
+      "Najlepsza klasa? Ta, której nie ma (dzień wolny!).",
+      "Sprawdzanie prac to maraton, nie sprint.",
+      "Nauczyciel: jedyna osoba, która radośnie widzi dzwonek.",
+      "Moja mantra: 'Do wakacji zostało tylko...'",
+      "Najcenniejsza rzecz? Czas na kawę między lekcjami.",
+      "Nauczyciel nie potrzebuje budzika, ma wewnętrzny dzwonek.",
+      "Lekcje zdalne? Witamy w świecie wyłączonych kamer!",
+      "Mój fitness tracker szaleje w szkole - to nie ćwiczenia, to praca!",
+      "Pytanie retoryczne nauczyciela: 'Dlaczego nikt nie słucha?'",
+      "Najlepsza pora roku? Wakacje. Najgorsza? Wrzesień.",
+      "Nauczyciel może wszystko zrobić z 3 zł i zapałkami... prawie wszystko.",
+      "Moja cierpliwość jest jak bateria - rozładowuje się o 13:45.",
+      "Dzień nauczyciela bez kawy? Science fiction.",
+      "Najszybszy sprinter? Nauczyciel biegnący na przerwę do toalety.",
+      "Moje ulubione dwa słowa? Dzwonek zadzwonił.",
+      "Nauczyciel to iluzjonista - sprawia, że 45 minut trwa wieczność.",
+      "Najlepsza motywacja? Piątek.",
+      "Klasa cicha jak makiem zasiał? To ja śpię i śnię.",
+      "Mój sport olimpijski? Unikanie rodziców na zebraniu.",
+      "Nauczyciel nigdy nie zapomina twarzy... zwłaszcza tej, która przeszkadza.",
+      "Kawa, kredki, chaos - normalny dzień w szkole.",
+      "Najdłuższa godzina? Ostatnia lekcja w piątek.",
+      "Nauczyciel wie, kto nie odrobił zadania, zanim spyta.",
+      "Moje ulubione słowo? Wakacje. Najgorsze? Zebranie.",
+      "Przerwa 10-minutowa to w praktyce 7 minut (z bieganiem).",
+      "Nauczyciel: profesjonalny tłumacz dzieci��cych wymówek.",
+      "Najlepsza chwila dnia? Gdy ostatni uczeń wychodzi.",
+      "Moja strategia? Przetrwać do piątku.",
+      "Nauczyciel to ninja - potrafi zniknąć w tłumie rodziców.",
+      "Najgłośniejsza cisza? Przed ogłoszeniem ocen.",
+      "Moje marzenie? Uczeń, który pyta zanim zrobi.",
+      "Dzień otwarty szkoły = dzień zamkniętego nauczyciela w sali.",
+      "Nauczyciel to multitasking master: pisze, mówi, pilnuje i myśli o kawie.",
+      "Najkrótszy tydzień? Ten z dwoma dniami wolnymi.",
+      "Moja supermoc? Czuję smartfona pod ławką.",
+      "Najlepszy prezent dla nauczyciela? Dzień bez zebrań.",
+      "Nauczyciel uczy cierpliwości... głównie samego siebie.",
+      "Mój plan awaryjny? Zawsze mieć plan B... i C... i D.",
+      "Najszybsze 45 minut? Gdy lekcja jest ciekawa dla mnie.",
+      "Nauczyciel to trener, psycholog i policjant w jednej osobie.",
+      "Moje motto? Kawy nigdy za dużo.",
+      "Najlepsze uczucie? Puste biurko po sprawdzeniu wszystkiego.",
+      "Nauczyciel zna odpowiedź na pytanie zanim padnie.",
+      "Dzień bez kawy? Dzień pełen chaosu.",
+      "Najgorsza pora? Poniedziałek rano po weekendzie.",
+      "Nauczyciel to zawód, gdzie pracujesz w domu i w szkole.",
+      "Moja ulubiona liczba? 60... minut przerwy obiadowej.",
+      "Najlepszy moment? Gdy wszyscy rozumieją temat.",
+      "Nauczyciel nigdy nie jest sam - zawsze jest z 30 dziećmi.",
+      "Moja mantra przed lekcją? 'Spokojnie, to tylko 45 minut.'",
+      "Najdłuższy dzień? Ten przed długim weekendem.",
+      "Nauczyciel wie, że cisza to złudzenie.",
+      "Moje wakacyjne plany? Spać, jeść, nie sprawdzać prac.",
+      "Najlepsza decyzja dnia? Trzecia kawa.",
+      "Nauczyciel to osoba, która pamięta wszystkie imiona... w 5 klasach.",
+      "Mój sekretny talent? Widzę ściągę z odległości 10 metrów.",
+      "Najkrótsza przerwa? Ta 5-minutowa między lekcjami.",
+      "Nauczyciel to zawód, gdzie słowo 'cisza' to życzenie.",
+      "Moja ulubiona pora? 15:00 w piątek.",
+      "Najlepszy dzień miesiąca? Ten z wypłatą.",
+      "Nauczyciel nie starzeje się, tylko zdobywa doświadczenie w cierpliwości.",
+      "Moje pytanie dnia? 'Kto nie odrobił pracy domowej?'",
+      "Najdłuższy miesiąc? Wrzesień.",
+      "Nauczyciel to jedyna osoba, która raduje się z choroby... dnia wolnego.",
+      "Moja strategia lekcyjna? Improwizacja na najwyższym poziomie.",
+      "Najlepsza forma relaksu? Cisza po ostatnim dzwonku.",
+      "Nauczyciel zna każdą wymówkę - sam je wszystkie wymyślił.",
+      "Moja siła? Przetrwać 6 lekcji z uśmiechem.",
+      "Najgorszy dzień? Zebranie rodziców w poniedziałek wieczorem.",
+      "Nauczyciel to marzycie, który wierzy w ciszę na lekcji.",
+      "Moje ulubione pytanie? 'Czy mogę już iść?'... w piątek.",
+      "Najlepsza chwila roku? Pierwszy dzień wakacji.",
+      "Nauczyciel to osoba, która planuje wakacje od września.",
+      "Moja definicja szczęścia? Wszystkie prace sprawdzone.",
+      "Najkrótszy rok szkolny? Ten, który właśnie się skończył.",
+      "Nauczyciel wie, że 'pies zjadł pracę' to klasyk.",
+      "Moje credo? Przetrwać do dzwonka.",
+      "Najlepsza muzyka? Dzwonek na koniec dnia.",
+      "Nauczyciel to osoba, która marzy o ciszy bardziej niż o czymkolwiek.",
+      "Moja ulubiona liczba uczniów? Zero... w dzień wolny!",
+      "Najdłuższa sekunda? Gdy czekasz na odpowiedź ucznia.",
+      "Nauczyciel nigdy nie mówi 'nie wiem', tylko 'sprawdzimy to razem'.",
+      "Moje zawodowe narzędzie? Głos, kreda i niezłomna wola.",
+      "Najlepszy komplement? 'Ta lekcja była super!'",
+      "Nauczyciel to osoba, która liczy dni do weekendu w czwartek.",
+      "Moja filozofia? Kawa rozwiązuje 90% problemów.",
+      "Najkrótsza lekcja? Ta, którą odwołano.",
+      "Nauczyciel to zawód, gdzie każdy dzień to przygoda.",
+      "Moje motto życiowe? 'Do wakacji zostało...'",
+      "Najlepsza nagroda? Uśmiech ucznia, który zrozumiał.",
+      "Nauczyciel to osoba, która zbiera długopisy jak skarby.",
+      "Moja supermoc numer dwa? Czuję, kto nie słucha.",
+      "Najgorszy moment? Gdy zabraknie miejsca w dzienniku.",
+      "Nauczyciel nigdy nie jest przygotowany na wszystko... ale udaje.",
+      "Moja ulubiona pora dnia? Po zajęciach.",
+      "Najdłuższa droga? Od poniedziałku do piątku.",
+      "Nauczyciel to osoba, która wie, że cisza jest złotym czasem.",
+      "Moje hasło? 'Jeszcze tylko 10 tygodni do wakacji!'",
+      "Najlepszy dzień tygodnia? Piątek, bez wątpienia.",
+      "Nauczyciel to zawód, gdzie stres i kawa idą w parze.",
+      "Moja definicja luksusu? Przerwa bez obowiązków dyżurnych.",
+      "Najkrótsza rozmowa? 'Odrobiliście?' - 'Nie.' - 'Myślałem.'",
+      "Nauczyciel wie, że plan lekcji to tylko sugestia.",
+      "Moja rada na zły dzień? Kolejna kawa.",
+      "Najlepsze uczucie świata? Wakacje. Kropka."
+    ];
+    
+    let allEvents = [];
+    let isPasswordVerified = false;
+    let currentQuoteIndex = -1;
+    let editingEvent = null;
+    
+    const defaultConfig = {
+      main_title: 'Co w najbliższym czasie',
+      vacation_label: 'Do wakacji zostało',
+      primary_color: '#6366f1',
+      secondary_color: '#ffffff',
+      text_color: '#1f2937',
+      accent_color: '#8b5cf6',
+      highlight_color: '#ec4899'
+    };
+    
+    async function onConfigChange(config) {
+      const mainTitle = config.main_title || defaultConfig.main_title;
+      const vacationLabel = config.vacation_label || defaultConfig.vacation_label;
+      
+      document.getElementById('mainTitle').textContent = mainTitle;
+      document.getElementById('vacationLabel').textContent = vacationLabel;
+    }
+    
+    const dataHandler = {
+      onDataChanged(data) {
+        allEvents = data.sort((a, b) => {
+          const dateA = new Date(a.date + 'T' + a.time);
+          const dateB = new Date(b.date + 'T' + b.time);
+          return dateA - dateB;
+        });
+        renderEvents();
+      }
+    };
+    
+    function updateDateTime() {
+      const now = new Date();
+      const options = { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      };
+      document.getElementById('currentDateTime').textContent = now.toLocaleDateString('pl-PL', options);
+    }
+    
+    function updateCountdown() {
+      const now = new Date();
+      const diff = VACATION_DATE - now;
+      
+      if (diff > 0) {
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        
+        document.getElementById('daysLeft').textContent = days;
+        document.getElementById('hoursLeft').textContent = hours;
+        document.getElementById('minutesLeft').textContent = minutes;
+        document.getElementById('secondsLeft').textContent = seconds;
+      } else {
+        document.getElementById('daysLeft').textContent = '0';
+        document.getElementById('hoursLeft').textContent = '0';
+        document.getElementById('minutesLeft').textContent = '0';
+        document.getElementById('secondsLeft').textContent = '0';
+      }
+    }
+    
+    function getQuoteIndex() {
+      const now = new Date();
+      const hoursSinceEpoch = Math.floor(now.getTime() / (1000 * 60 * 60 * 12));
+      return hoursSinceEpoch % TEACHER_QUOTES.length;
+    }
+    
+    function updateQuote() {
+      const newIndex = getQuoteIndex();
+      if (newIndex !== currentQuoteIndex) {
+        currentQuoteIndex = newIndex;
+        document.getElementById('teacherQuote').textContent = `📚 "${TEACHER_QUOTES[currentQuoteIndex]}"`;
+      }
+    }
+    
+    function renderEvents() {
+      const now = new Date();
+      const oneWeekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      
+      const upcomingEvents = allEvents.filter(event => {
+        const eventDate = new Date(event.date + 'T' + event.time);
+        return eventDate >= now && eventDate <= oneWeekFromNow && eventDate <= END_OF_YEAR;
+      });
+      
+      const laterEvents = allEvents.filter(event => {
+        const eventDate = new Date(event.date + 'T' + event.time);
+        return eventDate > oneWeekFromNow && eventDate <= END_OF_YEAR;
+      });
+      
+      const upcomingContainer = document.getElementById('upcomingWeekEvents');
+      const laterContainer = document.getElementById('laterEvents');
+      
+      upcomingContainer.innerHTML = '';
+      laterContainer.innerHTML = '';
+      
+      if (upcomingEvents.length === 0) {
+        document.getElementById('noUpcomingEvents').classList.remove('hidden');
+      } else {
+        document.getElementById('noUpcomingEvents').classList.add('hidden');
+        upcomingEvents.forEach(event => {
+          upcomingContainer.appendChild(createEventCard(event, true));
+        });
+      }
+      
+      if (laterEvents.length === 0) {
+        document.getElementById('noLaterEvents').classList.remove('hidden');
+      } else {
+        document.getElementById('noLaterEvents').classList.add('hidden');
+        laterEvents.forEach(event => {
+          laterContainer.appendChild(createEventCard(event, false));
+        });
+      }
+    }
+    
+    function createEventCard(event, isHighlighted) {
+      const card = document.createElement('div');
+      const isUserHighlighted = event.is_highlighted === true;
+      const baseClasses = 'event-card bg-white rounded-lg shadow-md p-4';
+      const highlightClasses = isHighlighted ? 'highlighted-event border-2 border-indigo-400' : '';
+      const userHighlightClasses = isUserHighlighted ? 'bg-gradient-to-br from-amber-50 to-yellow-50 border-2 border-amber-400' : '';
+      
+      card.className = `${baseClasses} ${highlightClasses} ${userHighlightClasses}`;
+      
+      const eventDate = new Date(event.date + 'T' + event.time);
+      const dateOptions = { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' };
+      const formattedDate = eventDate.toLocaleDateString('pl-PL', dateOptions);
+      
+      const eventEndDate = event.end_date ? new Date(event.end_date + 'T' + event.time) : null;
+      const formattedEndDate = eventEndDate ? eventEndDate.toLocaleDateString('pl-PL', dateOptions) : null;
+      const dateDisplay = formattedEndDate ? `${formattedDate} - ${formattedEndDate}` : formattedDate;
+      
+      card.innerHTML = `
+        <div class="flex justify-between items-start mb-2">
+          <h3 class="text-lg font-bold text-gray-800 flex-1">${isUserHighlighted ? '⭐ ' : ''}${escapeHtml(event.title)}</h3>
+          <div class="flex gap-2 ml-2">
+            <button class="edit-btn text-blue-500 hover:text-blue-700" data-id="${event.__backendId}">✏️</button>
+            <button class="delete-btn text-red-500 hover:text-red-700" data-id="${event.__backendId}">🗑️</button>
+          </div>
+        </div>
+        <p class="text-sm text-indigo-600 font-semibold mb-1">📅 ${dateDisplay}</p>
+        <p class="text-sm text-gray-600 mb-2">🕐 ${event.time}</p>
+        ${event.description ? `<p class="text-sm text-gray-700 mt-2">${escapeHtml(event.description)}</p>` : ''}
+      `;
+      
+      const deleteBtn = card.querySelector('.delete-btn');
+      deleteBtn.addEventListener('click', () => handleDeleteEvent(event));
+      
+      const editBtn = card.querySelector('.edit-btn');
+      editBtn.addEventListener('click', () => handleEditEvent(event));
+      
+      return card;
+    }
+    
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+    
+    function handleEditEvent(event) {
+      editingEvent = event;
+      document.getElementById('modalTitle').textContent = 'Edytuj wydarzenie';
+      document.getElementById('addEventModal').classList.remove('hidden');
+      
+      if (isPasswordVerified) {
+        fillEditForm(event);
+      } else {
+        document.getElementById('password').focus();
+      }
+    }
+    
+    function fillEditForm(event) {
+      document.getElementById('eventTitle').value = event.title;
+      document.getElementById('eventDate').value = event.date;
+      document.getElementById('eventEndDate').value = event.end_date || '';
+      document.getElementById('eventTime').value = event.time;
+      document.getElementById('eventDescription').value = event.description || '';
+      document.getElementById('eventHighlight').checked = event.is_highlighted || false;
+      document.getElementById('submitButton').innerHTML = '<span>Zapisz zmiany</span>';
+    }
+    
+    async function handleDeleteEvent(event) {
+      const deleteBtn = document.querySelector(`[data-id="${event.__backendId}"]`);
+      const originalContent = deleteBtn.innerHTML;
+      deleteBtn.innerHTML = '<div class="loading-spinner mx-auto"></div>';
+      deleteBtn.disabled = true;
+      
+      const result = await window.dataSdk.delete(event);
+      
+      if (!result.isOk) {
+        deleteBtn.innerHTML = originalContent;
+        deleteBtn.disabled = false;
+        showToast('Błąd podczas usuwania wydarzenia', 'error');
+      }
+    }
+    
+    function showToast(message, type = 'success') {
+      const toast = document.createElement('div');
+      toast.className = `fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg text-white ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      
+      setTimeout(() => {
+        toast.style.animation = 'fadeIn 0.3s ease reverse';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+    
+    document.getElementById('fabButton').addEventListener('click', () => {
+      editingEvent = null;
+      document.getElementById('modalTitle').textContent = 'Dodaj wydarzenie';
+      document.getElementById('addEventModal').classList.remove('hidden');
+      if (!isPasswordVerified) {
+        document.getElementById('password').focus();
+      }
+    });
+    
+    document.getElementById('closeModal').addEventListener('click', () => {
+      document.getElementById('addEventModal').classList.add('hidden');
+      resetForm();
+    });
+    
+    document.getElementById('addEventModal').addEventListener('click', (e) => {
+      if (e.target.id === 'addEventModal') {
+        document.getElementById('addEventModal').classList.add('hidden');
+        resetForm();
+      }
+    });
+    
+    document.getElementById('verifyPasswordButton').addEventListener('click', () => {
+      const password = document.getElementById('password').value;
+      if (password === CORRECT_PASSWORD) {
+        isPasswordVerified = true;
+        document.getElementById('passwordSection').classList.add('hidden');
+        document.getElementById('verifyPasswordButton').classList.add('hidden');
+        document.getElementById('eventFieldsSection').classList.remove('hidden');
+        document.getElementById('passwordError').classList.add('hidden');
+        
+        if (editingEvent) {
+          fillEditForm(editingEvent);
+        }
+        
+        document.getElementById('eventTitle').focus();
+      } else {
+        document.getElementById('passwordError').classList.remove('hidden');
+      }
+    });
+    
+    document.getElementById('eventForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      if (!isPasswordVerified) {
+        return;
+      }
+      
+      if (!editingEvent && allEvents.length >= 999) {
+        showToast('Osiągnięto maksymalny limit 999 wydarzeń. Usuń niektóre wydarzenia.', 'error');
+        return;
+      }
+      
+      const submitButton = document.getElementById('submitButton');
+      submitButton.innerHTML = '<div class="loading-spinner mx-auto"></div>';
+      submitButton.disabled = true;
+      
+      const startDate = document.getElementById('eventDate').value;
+      const endDate = document.getElementById('eventEndDate').value;
+      
+      if (endDate && endDate < startDate) {
+        showToast('Data zakończenia nie może być wcześniejsza niż data rozpoczęcia', 'error');
+        submitButton.innerHTML = editingEvent ? '<span>Zapisz zmiany</span>' : '<span>Dodaj wydarzenie</span>';
+        submitButton.disabled = false;
+        return;
+      }
+      
+      const eventData = {
+        id: editingEvent ? editingEvent.id : Date.now().toString(),
+        title: document.getElementById('eventTitle').value,
+        date: startDate,
+        end_date: endDate || '',
+        time: document.getElementById('eventTime').value,
+        description: document.getElementById('eventDescription').value,
+        is_highlighted: document.getElementById('eventHighlight').checked,
+        created_at: editingEvent ? editingEvent.created_at : new Date().toISOString()
+      };
+      
+      let result;
+      if (editingEvent) {
+        result = await window.dataSdk.update({
+          ...eventData,
+          __backendId: editingEvent.__backendId
+        });
+      } else {
+        result = await window.dataSdk.create(eventData);
+      }
+      
+      if (result.isOk) {
+        showToast(editingEvent ? 'Wydarzenie zostało zaktualizowane!' : 'Wydarzenie zostało dodane!', 'success');
+        document.getElementById('addEventModal').classList.add('hidden');
+        resetForm();
+      } else {
+        showToast('Błąd podczas zapisywania wydarzenia', 'error');
+        submitButton.innerHTML = editingEvent ? '<span>Zapisz zmiany</span>' : '<span>Dodaj wydarzenie</span>';
+        submitButton.disabled = false;
+      }
+    });
+    
+    function resetForm() {
+      document.getElementById('eventForm').reset();
+      document.getElementById('passwordError').classList.add('hidden');
+      isPasswordVerified = false;
+      editingEvent = null;
+      document.getElementById('passwordSection').classList.remove('hidden');
+      document.getElementById('verifyPasswordButton').classList.remove('hidden');
+      document.getElementById('eventFieldsSection').classList.add('hidden');
+      document.getElementById('modalTitle').textContent = 'Dodaj wydarzenie';
+      const submitButton = document.getElementById('submitButton');
+      submitButton.innerHTML = '<span>Dodaj wydarzenie</span>';
+      submitButton.disabled = false;
+    }
+    
+    async function init() {
+      const sdkResult = await window.dataSdk.init(dataHandler);
+      if (!sdkResult.isOk) {
+        showToast('Błąd inicjalizacji bazy danych', 'error');
+        return;
+      }
+      
+      if (window.elementSdk) {
+        window.elementSdk.init({
+          defaultConfig,
+          onConfigChange,
+          mapToCapabilities: (config) => ({
+            recolorables: [
+              {
+                get: () => config.primary_color || defaultConfig.primary_color,
+                set: (value) => {
+                  config.primary_color = value;
+                  window.elementSdk.setConfig({ primary_color: value });
+                }
+              },
+              {
+                get: () => config.secondary_color || defaultConfig.secondary_color,
+                set: (value) => {
+                  config.secondary_color = value;
+                  window.elementSdk.setConfig({ secondary_color: value });
+                }
+              },
+              {
+                get: () => config.text_color || defaultConfig.text_color,
+                set: (value) => {
+                  config.text_color = value;
+                  window.elementSdk.setConfig({ text_color: value });
+                }
+              },
+              {
+                get: () => config.accent_color || defaultConfig.accent_color,
+                set: (value) => {
+                  config.accent_color = value;
+                  window.elementSdk.setConfig({ accent_color: value });
+                }
+              },
+              {
+                get: () => config.highlight_color || defaultConfig.highlight_color,
+                set: (value) => {
+                  config.highlight_color = value;
+                  window.elementSdk.setConfig({ highlight_color: value });
+                }
+              }
+            ],
+            borderables: [],
+            fontEditable: undefined,
+            fontSizeable: undefined
+          }),
+          mapToEditPanelValues: (config) => new Map([
+            ['main_title', config.main_title || defaultConfig.main_title],
+            ['vacation_label', config.vacation_label || defaultConfig.vacation_label]
+          ])
+        });
+      }
+      
+      updateDateTime();
+      updateCountdown();
+      updateQuote();
+      
+      setInterval(updateDateTime, 1000);
+      setInterval(updateCountdown, 1000);
+      setInterval(updateQuote, 60000);
+      
+      await onConfigChange(window.elementSdk ? window.elementSdk.config : defaultConfig);
+    }
+    
+    init();
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9bc35b05b5f61788',t:'MTc2ODEyMzQwOC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
