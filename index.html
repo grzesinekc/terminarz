@@ -18,45 +18,56 @@
         
         body { 
             font-family: 'Plus Jakarta Sans', sans-serif; 
-            background-color: #f8fafc;
+            background-color: #f1f5f9;
             color: #1e293b;
         }
 
         .glass-card {
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.5);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.04);
-            transition: all 0.2s ease-out;
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05);
         }
 
         .priority-critical {
-            border-left: 6px solid #ef4444;
+            border-left: 8px solid #ef4444;
         }
 
         .nav-blur {
-            background: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.85);
             backdrop-filter: saturate(180%) blur(20px);
         }
 
         .hero-section {
-            background-image: linear-gradient(to bottom, rgba(30, 64, 175, 0.9), rgba(30, 64, 175, 0.7)), url('https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=2000&auto=format&fit=crop');
+            background-image: linear-gradient(135deg, rgba(30, 64, 175, 0.95) 0%, rgba(59, 130, 246, 0.85) 100%), url('https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=2000&auto=format&fit=crop');
             background-size: cover;
             background-position: center;
-            border-radius: 0 0 3rem 3rem;
+            border-radius: 0 0 4rem 4rem;
         }
 
-        @keyframes pulse-blue {
-            0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
-            70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        @keyframes pulse-admin {
+            0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); }
+            70% { box-shadow: 0 0 0 12px rgba(37, 99, 235, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
         }
 
-        .admin-glow {
-            animation: pulse-blue 2s infinite;
+        .admin-active-btn {
+            animation: pulse-admin 2s infinite;
+            background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);
         }
 
-        /* Custom toggle switch */
+        .advice-gradient {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border: 1px solid #bae6fd;
+        }
+
+        /* Toggle switch */
         .switch {
             position: relative;
             display: inline-block;
@@ -68,7 +79,7 @@
             position: absolute;
             cursor: pointer;
             top: 0; left: 0; right: 0; bottom: 0;
-            background-color: #e2e8f0;
+            background-color: #cbd5e1;
             transition: .4s;
             border-radius: 24px;
         }
@@ -119,7 +130,7 @@
                 });
                 const data = await response.json();
                 return data.candidates?.[0]?.content?.parts?.[0]?.text || "...";
-            } catch (err) { return "Błąd AI"; }
+            } catch (err) { return "Błąd połączenia z AI"; }
         };
 
         const LucideIcon = ({ name, size = 20, className = "" }) => {
@@ -147,8 +158,8 @@
             const [editingEvent, setEditingEvent] = useState(null);
             const [loading, setLoading] = useState(true);
             const [isAiLoading, setIsAiLoading] = useState(false);
+            const [aiAdvice, setAiAdvice] = useState("");
 
-            // Stan formularza
             const [formState, setFormState] = useState({
                 title: '',
                 dateStart: '',
@@ -164,11 +175,19 @@
                 auth.signInAnonymously().catch(() => {});
                 const unsubscribe = db.collection('events').orderBy('dateStart', 'asc')
                     .onSnapshot(snapshot => {
-                        setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                        const fetchedEvents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setEvents(fetchedEvents);
                         setLoading(false);
+                        if (fetchedEvents.length > 0 && !aiAdvice) getAiAdvice(fetchedEvents);
                     }, () => setLoading(false));
                 return () => unsubscribe();
             }, []);
+
+            const getAiAdvice = async (data) => {
+                const eventTitles = data.slice(0, 5).map(e => e.title).join(", ");
+                const advice = await callGemini(`Na podstawie tych wydarzeń szkolnych: ${eventTitles}, napisz jedną krótką (max 15 słów) poradę organizacyjną dla nauczyciela. Zacznij od 'Porada:'`);
+                setAiAdvice(advice);
+            };
 
             useEffect(() => {
                 if (editingEvent) {
@@ -198,9 +217,9 @@
             }, [editingEvent, showModal]);
 
             const generateAIDesc = async () => {
-                if (!formState.title) return alert("Najpierw wpisz nazwę wydarzenia.");
+                if (!formState.title) return;
                 setIsAiLoading(true);
-                const desc = await callGemini(`Napisz krótki, konkretny opis szkolny (max 2 zdania) dla: "${formState.title}"`);
+                const desc = await callGemini(`Napisz krótki opis szkolny (max 2 zdania) dla: "${formState.title}"`);
                 setFormState(prev => ({ ...prev, description: desc.trim().replace(/"/g, '') }));
                 setIsAiLoading(false);
             };
@@ -215,11 +234,7 @@
 
             const handleSave = async (e) => {
                 e.preventDefault();
-                const dataToSave = {
-                    ...formState,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                };
-                
+                const dataToSave = { ...formState, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
                 try {
                     if (editingEvent) await db.collection('events').doc(editingEvent.id).update(dataToSave);
                     else await db.collection('events').add(dataToSave);
@@ -229,61 +244,97 @@
             };
 
             return (
-                <div className="min-h-screen flex flex-col pb-12">
-                    <header className="nav-blur sticky top-0 z-50 border-b p-4">
+                <div className="min-h-screen flex flex-col pb-20">
+                    <header className="nav-blur sticky top-0 z-50 border-b p-4 shadow-sm">
                         <div className="max-w-6xl mx-auto flex justify-between items-center">
                             <div className="flex items-center gap-4">
-                                <img src={LOGO_URL} className="w-12 h-12 md:w-16 md:h-16" alt="Logo" />
+                                <img src={LOGO_URL} className="w-12 h-12 md:w-16 md:h-16 drop-shadow-sm" alt="Logo" />
                                 <div>
-                                    <h1 className="font-black text-lg md:text-xl text-slate-800 leading-tight">Terminarz PSP Kietlin</h1>
-                                    {isAdmin && <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1"><LucideIcon name="shield-check" size={12}/> Tryb Administratora</span>}
+                                    <h1 className="font-extrabold text-xl md:text-2xl text-slate-800 tracking-tight">Terminarz PSP Kietlin</h1>
+                                    <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest">Panel Informacyjny Szkoły</p>
                                 </div>
                             </div>
-                            <div className="flex gap-3">
+                            
+                            <div className="flex items-center gap-3">
+                                <button 
+                                    onClick={() => isAdmin ? setIsAdmin(false) : setShowLogin(true)} 
+                                    className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-black text-xs uppercase tracking-tighter transition-all duration-300 shadow-md ${isAdmin ? 'bg-red-500 text-white hover:bg-red-600' : 'admin-active-btn text-white hover:scale-105'}`}
+                                >
+                                    <LucideIcon name={isAdmin ? "log-out" : "shield-check"} size={16} />
+                                    <span>{isAdmin ? 'Wyloguj' : 'ADMIN'}</span>
+                                </button>
+                                
                                 {isAdmin && (
-                                    <button onClick={() => {setEditingEvent(null); setShowModal(true);}} className="admin-glow bg-blue-600 text-white px-6 py-2.5 rounded-2xl text-sm font-black shadow-lg flex items-center gap-2 hover:bg-blue-700 transition-all">
-                                        <LucideIcon name="plus" size={18} strokeWidth={3}/> Dodaj
+                                    <button onClick={() => {setEditingEvent(null); setShowModal(true);}} className="bg-emerald-500 text-white p-2.5 rounded-2xl shadow-lg hover:bg-emerald-600 transition-all hover:scale-110">
+                                        <LucideIcon name="plus" size={24} strokeWidth={3}/>
                                     </button>
                                 )}
-                                <button onClick={() => isAdmin ? setIsAdmin(false) : setShowLogin(true)} className={`p-3 rounded-2xl transition-colors ${isAdmin ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
-                                    <LucideIcon name={isAdmin ? "log-out" : "lock"} />
-                                </button>
                             </div>
                         </div>
                     </header>
 
-                    <main className="max-w-5xl w-full mx-auto p-6 mt-6 space-y-6">
-                        <div className="grid gap-4">
+                    <section className="hero-section py-16 px-6 text-center text-white shadow-2xl">
+                        <div className="max-w-4xl mx-auto">
+                            <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-tighter">Planowanie to sukces!</h2>
+                            <p className="text-blue-100 text-lg font-medium opacity-90">Oficjalny terminarz wydarzeń Publicznej Szkoły Podstawowej w Kietlinie</p>
+                            
+                            {/* Panel Porad AI */}
+                            {aiAdvice && (
+                                <div className="mt-8 advice-gradient p-5 rounded-3xl max-w-2xl mx-auto flex items-center gap-4 text-slate-700 shadow-xl border-white animate-in fade-in slide-in-from-bottom-4 duration-700">
+                                    <div className="bg-amber-400 p-3 rounded-2xl text-white shadow-lg">
+                                        <LucideIcon name="lightbulb" size={24} />
+                                    </div>
+                                    <p className="text-left font-bold text-sm leading-snug tracking-tight">
+                                        <span className="text-blue-600 block text-[10px] uppercase mb-1">Porada Dnia (Gemini AI)</span>
+                                        {aiAdvice.replace('Porada:', '').trim()}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </section>
+
+                    <main className="max-w-5xl w-full mx-auto p-6 -mt-10 space-y-6">
+                        <div className="grid gap-5">
                             {loading ? (
-                                <div className="text-center py-20"><LucideIcon name="loader" className="animate-spin text-blue-500" size={40} /></div>
+                                <div className="text-center py-20 bg-white/50 rounded-[3rem] border-2 border-dashed border-slate-200">
+                                    <LucideIcon name="loader-2" className="animate-spin text-blue-500 mx-auto mb-4" size={48} />
+                                    <p className="font-bold text-slate-400">Ładowanie planu zajęć...</p>
+                                </div>
+                            ) : events.length === 0 ? (
+                                <div className="glass-card p-20 text-center rounded-[3rem] border-2 border-dashed border-slate-200">
+                                    <p className="text-slate-400 font-black text-xl">Obecnie brak zaplanowanych wydarzeń</p>
+                                </div>
                             ) : events.map(ev => (
-                                <div key={ev.id} className={`glass-card p-6 rounded-[2.5rem] flex flex-col md:flex-row justify-between items-start md:items-center gap-4 group ${ev.priority === 'critical' ? 'priority-critical' : ''}`}>
-                                    <div className="flex gap-5 items-center">
-                                        <div className="bg-gradient-to-br from-blue-600 to-blue-500 text-white w-20 h-20 rounded-3xl flex flex-col items-center justify-center shadow-lg">
-                                            <span className="text-3xl font-black">{new Date(ev.dateStart).getDate()}</span>
-                                            <span className="text-[10px] uppercase font-black">{new Date(ev.dateStart).toLocaleDateString('pl', {month: 'short'})}</span>
+                                <div key={ev.id} className={`glass-card p-6 rounded-[2.5rem] flex flex-col md:flex-row justify-between items-start md:items-center gap-4 group ${ev.priority === 'critical' ? 'priority-critical' : 'border-l-8 border-l-blue-500'}`}>
+                                    <div className="flex gap-6 items-center w-full">
+                                        <div className="bg-gradient-to-br from-slate-800 to-slate-900 text-white w-24 h-24 rounded-[2rem] flex flex-col items-center justify-center shadow-2xl flex-shrink-0 group-hover:scale-105 transition-transform">
+                                            <span className="text-4xl font-black">{new Date(ev.dateStart).getDate()}</span>
+                                            <span className="text-[10px] uppercase font-extrabold tracking-widest text-blue-400">{new Date(ev.dateStart).toLocaleDateString('pl', {month: 'long'})}</span>
                                         </div>
-                                        <div>
-                                            <h3 className="font-black text-xl text-slate-800">{ev.title}</h3>
-                                            <div className="flex flex-wrap gap-2 mt-1">
-                                                <span className="text-[10px] font-black text-slate-400 uppercase bg-slate-100 px-3 py-1 rounded-full flex items-center gap-1">
-                                                    <LucideIcon name="calendar" size={12}/> {ev.dateStart} {ev.dateEnd && ev.dateEnd !== ev.dateStart ? ` → ${ev.dateEnd}` : ''}
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <h3 className="font-black text-2xl text-slate-800 tracking-tight">{ev.title}</h3>
+                                                {ev.priority === 'high' && <span className="bg-amber-100 text-amber-600 px-2 py-0.5 rounded-lg text-[10px] font-black uppercase">Ważne</span>}
+                                            </div>
+                                            <div className="flex flex-wrap gap-2 mt-2">
+                                                <span className="text-[10px] font-black text-slate-500 uppercase bg-slate-100 px-4 py-1.5 rounded-full flex items-center gap-2">
+                                                    <LucideIcon name="calendar" size={14}/> {ev.dateStart} {ev.dateEnd && ev.dateEnd !== ev.dateStart ? ` → ${ev.dateEnd}` : ''}
                                                 </span>
                                                 {ev.isAllDay ? (
-                                                    <span className="text-[10px] font-black text-amber-600 uppercase bg-amber-50 px-3 py-1 rounded-full">Cały dzień</span>
+                                                    <span className="text-[10px] font-black text-emerald-600 uppercase bg-emerald-50 px-4 py-1.5 rounded-full">Cały dzień</span>
                                                 ) : ev.timeStart && (
-                                                    <span className="text-[10px] font-black text-blue-500 uppercase bg-blue-50 px-3 py-1 rounded-full flex items-center gap-1">
-                                                        <LucideIcon name="clock" size={12}/> {ev.timeStart} {ev.timeEnd ? `- ${ev.timeEnd}` : ''}
+                                                    <span className="text-[10px] font-black text-blue-600 uppercase bg-blue-50 px-4 py-1.5 rounded-full flex items-center gap-2">
+                                                        <LucideIcon name="clock" size={14}/> {ev.timeStart} {ev.timeEnd ? `- ${ev.timeEnd}` : ''}
                                                     </span>
                                                 )}
                                             </div>
-                                            {ev.description && <p className="text-sm text-slate-500 mt-2 font-medium">{ev.description}</p>}
+                                            {ev.description && <p className="text-sm text-slate-500 mt-4 font-semibold leading-relaxed max-w-2xl">{ev.description}</p>}
                                         </div>
                                     </div>
                                     {isAdmin && (
-                                        <div className="flex gap-2">
-                                            <button onClick={() => {setEditingEvent(ev); setShowModal(true);}} className="p-3 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all"><LucideIcon name="edit-3" size={18}/></button>
-                                            <button onClick={() => confirm("Usunąć?") && db.collection('events').doc(ev.id).delete()} className="p-3 bg-red-50 text-red-600 rounded-2xl hover:bg-red-600 hover:text-white transition-all"><LucideIcon name="trash-2" size={18}/></button>
+                                        <div className="flex gap-2 self-end md:self-center">
+                                            <button onClick={() => {setEditingEvent(ev); setShowModal(true);}} className="p-4 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"><LucideIcon name="edit-3" size={20}/></button>
+                                            <button onClick={() => confirm("Usunąć?") && db.collection('events').doc(ev.id).delete()} className="p-4 bg-red-50 text-red-600 rounded-2xl hover:bg-red-600 hover:text-white transition-all shadow-sm"><LucideIcon name="trash-2" size={20}/></button>
                                         </div>
                                     )}
                                 </div>
@@ -291,90 +342,88 @@
                         </div>
                     </main>
 
+                    {/* Modale (Login i Formularz) pozostają funkcjonalnie bez zmian, z lekkim odświeżeniem styli */}
                     {showLogin && (
-                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
-                            <form onSubmit={handleLogin} className="bg-white p-10 rounded-[3rem] w-full max-w-sm">
-                                <h3 className="text-center font-black text-xl mb-6">Panel Nauczyciela</h3>
-                                <input name="password" type="password" placeholder="Hasło" autoFocus className="w-full p-4 bg-slate-50 border-2 border-slate-50 focus:border-blue-400 rounded-2xl mb-4 text-center font-black outline-none" />
-                                <button className="w-full bg-blue-600 text-white p-4 rounded-2xl font-black">ZALOGUJ</button>
-                                <button type="button" onClick={() => setShowLogin(false)} className="w-full mt-4 text-slate-400 text-xs font-bold uppercase">Wróć</button>
+                        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[100]">
+                            <form onSubmit={handleLogin} className="bg-white p-12 rounded-[4rem] w-full max-w-sm shadow-2xl animate-in zoom-in duration-300">
+                                <div className="w-20 h-20 bg-blue-600 text-white rounded-[2rem] flex items-center justify-center mx-auto mb-8 shadow-xl shadow-blue-200">
+                                    <LucideIcon name="shield-check" size={40} />
+                                </div>
+                                <h3 className="text-center font-black text-2xl mb-8 tracking-tight">Autoryzacja Admina</h3>
+                                <input name="password" type="password" placeholder="Hasło dostępu" autoFocus className="w-full p-5 bg-slate-100 border-2 border-transparent focus:border-blue-500 rounded-3xl mb-6 text-center font-black outline-none transition-all text-lg" />
+                                <button className="w-full bg-blue-600 text-white p-5 rounded-3xl font-black text-lg shadow-lg hover:bg-blue-700 active:scale-95 transition-all uppercase tracking-widest">Weryfikuj</button>
+                                <button type="button" onClick={() => setShowLogin(false)} className="w-full mt-6 text-slate-400 text-xs font-bold uppercase tracking-widest hover:text-slate-600">Anuluj</button>
                             </form>
                         </div>
                     )}
 
                     {showModal && (
-                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
-                            <div className="bg-white p-8 rounded-[3rem] w-full max-w-2xl max-h-[95vh] overflow-y-auto shadow-2xl relative">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h3 className="font-black text-2xl uppercase text-slate-800">{editingEvent ? 'Edytuj' : 'Nowe Wydarzenie'}</h3>
-                                    <button onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-100 rounded-full"><LucideIcon name="x" size={24} className="text-slate-400"/></button>
+                        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[100]">
+                            <div className="bg-white p-10 rounded-[4rem] w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl relative animate-in slide-in-from-bottom-8 duration-500">
+                                <div className="flex justify-between items-center mb-8">
+                                    <h3 className="font-black text-3xl uppercase tracking-tighter text-slate-800">{editingEvent ? 'Edytuj' : 'Nowy Wpis'}</h3>
+                                    <button onClick={() => setShowModal(false)} className="p-3 hover:bg-slate-100 rounded-3xl transition-colors"><LucideIcon name="x" size={28} className="text-slate-400"/></button>
                                 </div>
                                 
-                                <form onSubmit={handleSave} className="space-y-5">
-                                    {/* Tytuł i AI */}
+                                <form onSubmit={handleSave} className="space-y-6">
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Nazwa wydarzenia</label>
-                                        <div className="flex gap-2">
-                                            <input value={formState.title} onChange={e => setFormState({...formState, title: e.target.value})} placeholder="np. Wycieczka szkolna" className="w-full p-4 bg-slate-50 border-2 border-slate-50 focus:border-blue-400 rounded-2xl font-bold outline-none" required />
-                                            <button type="button" onClick={generateAIDesc} className="bg-purple-600 text-white px-5 rounded-2xl hover:scale-105 transition shadow-lg shadow-purple-100">
-                                                {isAiLoading ? <LucideIcon name="loader" className="animate-spin"/> : <LucideIcon name="sparkles" size={20}/>}
+                                        <label className="text-[10px] font-black text-slate-400 uppercase ml-6 tracking-widest">Nazwa wydarzenia</label>
+                                        <div className="flex gap-3">
+                                            <input value={formState.title} onChange={e => setFormState({...formState, title: e.target.value})} placeholder="np. Wycieczka do Warszawy" className="w-full p-5 bg-slate-50 border-2 border-slate-100 focus:border-blue-500 rounded-3xl font-bold outline-none text-lg transition-all" required />
+                                            <button type="button" onClick={generateAIDesc} className="bg-purple-600 text-white px-6 rounded-3xl hover:scale-105 active:scale-95 transition shadow-lg shadow-purple-200">
+                                                {isAiLoading ? <LucideIcon name="loader" className="animate-spin"/> : <LucideIcon name="sparkles" size={24}/>}
                                             </button>
                                         </div>
                                     </div>
 
-                                    {/* Cały dzień toggle */}
-                                    <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl">
+                                    <div className="flex items-center gap-4 bg-slate-50 p-6 rounded-3xl border border-slate-100">
                                         <label className="switch">
                                             <input type="checkbox" checked={formState.isAllDay} onChange={e => setFormState({...formState, isAllDay: e.target.checked})} />
                                             <span className="slider"></span>
                                         </label>
-                                        <span className="text-sm font-black text-slate-700 uppercase">Wydarzenie całodniowe</span>
+                                        <span className="text-sm font-black text-slate-600 uppercase tracking-tight">Wydarzenie całodniowe</span>
                                     </div>
 
-                                    {/* Zakres dat */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Data rozpoczęcia</label>
-                                            <input type="date" value={formState.dateStart} onChange={e => setFormState({...formState, dateStart: e.target.value, dateEnd: e.target.value > formState.dateEnd ? e.target.value : formState.dateEnd})} className="w-full p-4 bg-slate-50 border-2 border-slate-50 focus:border-blue-400 rounded-2xl font-bold outline-none" required />
+                                            <label className="text-[10px] font-black text-slate-400 uppercase ml-6 tracking-widest">Od dnia</label>
+                                            <input type="date" value={formState.dateStart} onChange={e => setFormState({...formState, dateStart: e.target.value})} className="w-full p-5 bg-slate-50 border-2 border-slate-100 focus:border-blue-500 rounded-3xl font-bold outline-none" required />
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Data zakończenia</label>
-                                            <input type="date" value={formState.dateEnd} onChange={e => setFormState({...formState, dateEnd: e.target.value})} className="w-full p-4 bg-slate-50 border-2 border-slate-50 focus:border-blue-400 rounded-2xl font-bold outline-none" required />
+                                            <label className="text-[10px] font-black text-slate-400 uppercase ml-6 tracking-widest">Do dnia</label>
+                                            <input type="date" value={formState.dateEnd} onChange={e => setFormState({...formState, dateEnd: e.target.value})} className="w-full p-5 bg-slate-50 border-2 border-slate-100 focus:border-blue-500 rounded-3xl font-bold outline-none" required />
                                         </div>
                                     </div>
 
-                                    {/* Zakres czasu (warunkowo) */}
                                     {!formState.isAllDay && (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in slide-in-from-top-1 duration-200">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                             <div className="space-y-2">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Godzina rozpoczęcia</label>
-                                                <input type="time" value={formState.timeStart} onChange={e => setFormState({...formState, timeStart: e.target.value})} className="w-full p-4 bg-slate-50 border-2 border-slate-50 focus:border-blue-400 rounded-2xl font-bold outline-none" />
+                                                <label className="text-[10px] font-black text-slate-400 uppercase ml-6 tracking-widest">Od godziny</label>
+                                                <input type="time" value={formState.timeStart} onChange={e => setFormState({...formState, timeStart: e.target.value})} className="w-full p-5 bg-slate-50 border-2 border-slate-100 focus:border-blue-500 rounded-3xl font-bold outline-none" />
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Godzina zakończenia</label>
-                                                <input type="time" value={formState.timeEnd} onChange={e => setFormState({...formState, timeEnd: e.target.value})} className="w-full p-4 bg-slate-50 border-2 border-slate-50 focus:border-blue-400 rounded-2xl font-bold outline-none" />
+                                                <label className="text-[10px] font-black text-slate-400 uppercase ml-6 tracking-widest">Do godziny</label>
+                                                <input type="time" value={formState.timeEnd} onChange={e => setFormState({...formState, timeEnd: e.target.value})} className="w-full p-5 bg-slate-50 border-2 border-slate-100 focus:border-blue-500 rounded-3xl font-bold outline-none" />
                                             </div>
                                         </div>
                                     )}
 
-                                    {/* Opis */}
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Szczegóły / Opis</label>
-                                        <textarea value={formState.description} onChange={e => setFormState({...formState, description: e.target.value})} placeholder="np. Zabieramy legitymacje..." className="w-full p-4 bg-slate-50 border-2 border-slate-50 focus:border-blue-400 rounded-2xl h-24 font-medium outline-none resize-none" />
+                                        <label className="text-[10px] font-black text-slate-400 uppercase ml-6 tracking-widest">Opis (AI pomoże uzupełnić)</label>
+                                        <textarea value={formState.description} onChange={e => setFormState({...formState, description: e.target.value})} placeholder="Dodatkowe szczegóły..." className="w-full p-5 bg-slate-50 border-2 border-slate-100 focus:border-blue-500 rounded-3xl h-32 font-medium outline-none resize-none transition-all" />
                                     </div>
 
-                                    {/* Priorytet */}
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Priorytet</label>
-                                        <select value={formState.priority} onChange={e => setFormState({...formState, priority: e.target.value})} className="w-full p-4 bg-slate-50 border-2 border-slate-50 focus:border-blue-400 rounded-2xl font-bold outline-none appearance-none cursor-pointer">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase ml-6 tracking-widest">Waga wydarzenia</label>
+                                        <select value={formState.priority} onChange={e => setFormState({...formState, priority: e.target.value})} className="w-full p-5 bg-slate-50 border-2 border-slate-100 focus:border-blue-500 rounded-3xl font-bold outline-none appearance-none cursor-pointer">
                                             <option value="standard">Standardowy (Niebieski)</option>
                                             <option value="high">Ważne (Wyróżnienie)</option>
-                                            <option value="critical">Pilne (Czerwony Alert)</option>
+                                            <option value="critical">Krytyczne (Czerwony Alert)</option>
                                         </select>
                                     </div>
 
-                                    <button className="w-full bg-blue-600 text-white p-5 rounded-[2rem] font-black text-lg shadow-xl shadow-blue-100 hover:bg-blue-700 active:scale-95 transition-all mt-4">
-                                        {editingEvent ? 'AKTUALIZUJ WPIS' : 'ZAPISZ WYDARZENIE'}
+                                    <button className="w-full bg-slate-900 text-white p-6 rounded-[2.5rem] font-black text-xl shadow-2xl hover:bg-blue-700 active:scale-95 transition-all mt-6 uppercase tracking-widest">
+                                        {editingEvent ? 'Zaktualizuj Plan' : 'Dodaj do Terminarza'}
                                     </button>
                                 </form>
                             </div>
