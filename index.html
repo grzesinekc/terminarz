@@ -10,10 +10,10 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Lucide Icons - Używamy biblioteki lucide bezpośrednio -->
+    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@0.321.0/dist/umd/lucide.min.js"></script>
     
-    <!-- Firebase -->
+    <!-- Firebase SDK (wersja kompatybilna) -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -30,13 +30,14 @@
         const { useState, useEffect, useMemo, useRef } = React;
 
         // --- KONFIGURACJA FIREBASE ---
+        // Tutaj wklej swoje dane z konsoli Firebase:
         const firebaseConfig = {
-            apiKey: "",
-            authDomain: "",
-            projectId: "",
-            storageBucket: "",
-            messagingSenderId: "",
-            appId: ""
+            apiKey: "AIzaSyAQ6hvZb5aLVQywy0cPnIZEMCj8CJqzTWg",
+            authDomain: "terminarz-6e9aa.firebaseapp.com",
+            projectId: "terminarz-6e9aa",
+            storageBucket: "terminarz-6e9aa.firebasestorage.app",
+            messagingSenderId: "401969311304",
+            appId: "1:401969311304:web:b75f9bdfad5dd6a661727d"
         };
 
         let db = null;
@@ -47,7 +48,7 @@
                 }
                 db = firebase.firestore();
             } catch (err) {
-                console.error("Firebase init error:", err);
+                console.error("Błąd inicjalizacji Firebase:", err);
             }
         }
 
@@ -59,24 +60,13 @@
             const iconRef = useRef(null);
 
             useEffect(() => {
-                if (iconRef.current) {
-                    // Czyścimy poprzednią zawartość
+                if (iconRef.current && lucide.icons[name]) {
                     iconRef.current.innerHTML = '';
-                    // Tworzymy nową ikonę za pomocą API lucide
-                    const iconElement = lucide.createIcons({
-                        icons: {
-                            [name]: lucide.icons[name]
-                        },
-                        attrs: {
-                            width: size,
-                            height: size,
-                            class: className
-                        }
-                    });
-                    
-                    // Lucide w wersji UMD wstawia ikony do elementów z data-lucide
                     const i = document.createElement('i');
                     i.setAttribute('data-lucide', name);
+                    i.style.width = `${size}px`;
+                    i.style.height = `${size}px`;
+                    if (className) i.className = className;
                     iconRef.current.appendChild(i);
                     lucide.createIcons();
                 }
@@ -93,6 +83,7 @@
             const [showModal, setShowModal] = useState(false);
             const [editingEvent, setEditingEvent] = useState(null);
 
+            // Timer odliczający do wakacji
             useEffect(() => {
                 const timer = setInterval(() => {
                     const now = new Date();
@@ -109,17 +100,20 @@
                 return () => clearInterval(timer);
             }, []);
 
+            // Pobieranie danych z bazy
             useEffect(() => {
                 if (db) {
                     const unsubscribe = db.collection('events').orderBy('date', 'asc')
                         .onSnapshot(snapshot => {
                             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                             setEvents(data);
-                        }, err => console.error("Firestore error:", err));
+                        }, err => {
+                            console.error("Błąd pobierania Firestore:", err);
+                        });
                     return () => unsubscribe();
                 } else {
                     setEvents([
-                        { id: '1', title: 'Przykładowy egzamin', date: '2025-05-15', description: 'To jest przykład. Podłącz Firebase, aby zapisywać własne wydarzenia.', isHigh: true }
+                        { id: '1', title: 'Podłącz Firebase', date: '2025-05-15', description: 'Uzupełnij klucze w kodzie, aby zapisywać wydarzenia.', isHigh: true }
                     ]);
                 }
             }, []);
@@ -158,23 +152,27 @@
                         alert("Błąd zapisu: " + err.message);
                     }
                 } else {
-                    alert("Tryb podglądu. Skonfiguruj Firebase w kodzie.");
-                    setShowModal(false);
+                    alert("Aplikacja w trybie podglądu. Podłącz bazę w kodzie.");
                 }
             };
 
             const deleteEvent = async (id) => {
-                if (confirm("Czy na pewno usunąć?") && db) {
-                    await db.collection('events').doc(id).delete();
+                if (confirm("Czy na pewno chcesz usunąć to wydarzenie?") && db) {
+                    try {
+                        await db.collection('events').doc(id).delete();
+                    } catch (err) {
+                        alert("Błąd podczas usuwania.");
+                    }
                 }
             };
 
             return (
                 <div className="min-h-screen flex flex-col pb-12">
+                    {/* Górny pasek */}
                     <header className="bg-white border-b-4 border-blue-600 shadow-sm sticky top-0 z-10">
                         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <div className="bg-blue-600 p-2 rounded-lg text-white flex items-center justify-center">
+                                <div className="bg-blue-600 p-2 rounded-lg text-white flex items-center justify-center shadow-lg shadow-blue-200">
                                     <LucideIcon name="calendar" size={24} />
                                 </div>
                                 <div>
@@ -184,7 +182,7 @@
                             </div>
                             <div className="flex gap-2">
                                 {isAdmin ? (
-                                    <button onClick={() => {setEditingEvent(null); setShowModal(true)}} className="bg-blue-600 text-white px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 hover:bg-blue-700 shadow-md">
+                                    <button onClick={() => {setEditingEvent(null); setShowModal(true)}} className="bg-blue-600 text-white px-5 py-2.5 rounded-full text-sm font-bold flex items-center gap-2 hover:bg-blue-700 shadow-md transition-all active:scale-95">
                                         <LucideIcon name="plus" size={16} /> Dodaj
                                     </button>
                                 ) : (
@@ -197,9 +195,13 @@
                     </header>
 
                     <main className="max-w-5xl w-full mx-auto px-4 mt-6 space-y-8">
-                        <div className="bg-gradient-to-br from-blue-700 to-indigo-800 text-white p-6 rounded-3xl shadow-xl">
-                            <h2 className="text-center text-xs uppercase tracking-[0.2em] mb-4 opacity-70">Do wakacji 2026 pozostało</h2>
-                            <div className="flex justify-center gap-4 md:gap-8">
+                        {/* Licznik do wakacji */}
+                        <div className="bg-gradient-to-br from-blue-700 to-indigo-800 text-white p-6 rounded-3xl shadow-xl relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-4 opacity-10">
+                                <LucideIcon name="sun" size={120} />
+                            </div>
+                            <h2 className="text-center text-xs uppercase tracking-[0.2em] mb-4 opacity-70 font-bold">Do wakacji 2026 pozostało</h2>
+                            <div className="flex justify-center gap-4 md:gap-8 relative z-1">
                                 {[
                                     {v: timeLeft.days, l: 'Dni'},
                                     {v: timeLeft.hours, l: 'Godz'},
@@ -207,39 +209,44 @@
                                     {v: timeLeft.seconds, l: 'Sek'}
                                 ].map((t, i) => (
                                     <div key={i} className="text-center">
-                                        <div className="text-3xl md:text-5xl font-black font-mono">{String(t.v).padStart(2, '0')}</div>
+                                        <div className="text-3xl md:text-5xl font-black font-mono tracking-tighter">{String(t.v).padStart(2, '0')}</div>
                                         <div className="text-[10px] uppercase opacity-60 mt-1 font-bold">{t.l}</div>
                                     </div>
                                 ))}
                             </div>
                         </div>
 
+                        {/* Sekcja wydarzeń */}
                         <div className="space-y-4">
                             <h2 className="text-lg font-bold flex items-center gap-2 text-slate-700">
                                 <LucideIcon name="clock" size={18} className="text-blue-600" /> Najbliższe wydarzenia
                             </h2>
                             {events.length === 0 ? (
-                                <div className="bg-white p-8 rounded-2xl border-2 border-dashed border-slate-200 text-center text-slate-400">
-                                    Brak zaplanowanych wydarzeń.
+                                <div className="bg-white p-12 rounded-3xl border-2 border-dashed border-slate-200 text-center text-slate-400">
+                                    <div className="flex justify-center mb-2 opacity-20"><LucideIcon name="inbox" size={48} /></div>
+                                    <p>Brak zaplanowanych wydarzeń.</p>
                                 </div>
                             ) : (
                                 <div className="grid gap-3">
                                     {events.map(event => (
-                                        <div key={event.id} className={`bg-white p-4 rounded-xl shadow-sm border-l-4 flex justify-between items-center ${event.isHigh ? 'border-l-orange-500' : 'border-l-blue-500'}`}>
+                                        <div key={event.id} className={`bg-white p-4 rounded-2xl shadow-sm border-l-4 flex justify-between items-center transition-all hover:shadow-md ${event.isHigh ? 'border-l-orange-500 bg-orange-50/30' : 'border-l-blue-500'}`}>
                                             <div className="flex gap-4 items-center">
-                                                <div className="text-center min-w-[50px]">
-                                                    <div className="text-xl font-bold text-slate-800">{new Date(event.date).getDate()}</div>
-                                                    <div className="text-[10px] uppercase font-bold text-slate-400">{new Date(event.date).toLocaleDateString('pl-PL', {month: 'short'})}</div>
+                                                <div className="text-center min-w-[60px] bg-slate-50 p-2 rounded-xl">
+                                                    <div className="text-xl font-black text-slate-800 leading-none">{new Date(event.date).getDate()}</div>
+                                                    <div className="text-[10px] uppercase font-bold text-slate-400 mt-1">{new Date(event.date).toLocaleDateString('pl-PL', {month: 'short'})}</div>
                                                 </div>
                                                 <div>
-                                                    <h3 className="font-bold text-slate-800">{event.title}</h3>
-                                                    <p className="text-xs text-slate-500">{event.description}</p>
+                                                    <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                                                        {event.title}
+                                                        {event.isHigh && <span className="text-[10px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full uppercase">Ważne</span>}
+                                                    </h3>
+                                                    <p className="text-sm text-slate-500 leading-tight mt-0.5">{event.description}</p>
                                                 </div>
                                             </div>
                                             {isAdmin && (
-                                                <div className="flex gap-2">
-                                                    <button onClick={() => {setEditingEvent(event); setShowModal(true)}} className="p-2 text-slate-400 hover:text-blue-600 flex items-center"><LucideIcon name="pencil" size={16}/></button>
-                                                    <button onClick={() => deleteEvent(event.id)} className="p-2 text-slate-400 hover:text-red-600 flex items-center"><LucideIcon name="trash-2" size={16}/></button>
+                                                <div className="flex gap-1">
+                                                    <button onClick={() => {setEditingEvent(event); setShowModal(true)}} className="p-2 text-slate-300 hover:text-blue-600 transition flex items-center"><LucideIcon name="pencil" size={16}/></button>
+                                                    <button onClick={() => deleteEvent(event.id)} className="p-2 text-slate-300 hover:text-red-600 transition flex items-center"><LucideIcon name="trash-2" size={16}/></button>
                                                 </div>
                                             )}
                                         </div>
@@ -249,10 +256,14 @@
                         </div>
                     </main>
 
-                    <footer className="bg-slate-900 text-slate-400 py-10 mt-auto text-center px-4">
-                        <div className="max-w-4xl mx-auto space-y-3">
+                    {/* Stopka */}
+                    <footer className="bg-slate-900 text-slate-400 py-12 mt-auto text-center px-4">
+                        <div className="max-w-4xl mx-auto space-y-4">
+                            <div className="flex justify-center gap-4 opacity-30">
+                                <LucideIcon name="graduation-cap" size={24} />
+                            </div>
                             <p className="text-white font-bold text-lg tracking-tight">Grzegorz Ciepielewski - PSP Kietlin</p>
-                            <div className="flex justify-center gap-4 text-xs opacity-50">
+                            <div className="flex justify-center gap-4 text-[10px] uppercase tracking-widest opacity-40 font-bold">
                                 <span>Wszelkie prawa zastrzeżone</span>
                                 <span>•</span>
                                 <span>© 2026</span>
@@ -260,45 +271,51 @@
                         </div>
                     </footer>
 
+                    {/* Logowanie */}
                     {showLogin && (
                         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                            <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
-                                <h3 className="text-lg font-bold mb-4">Panel Nauczyciela</h3>
+                            <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm">
+                                <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-4">
+                                    <LucideIcon name="lock" size={24} />
+                                </div>
+                                <h3 className="text-xl font-bold mb-2">Panel Nauczyciela</h3>
+                                <p className="text-sm text-slate-500 mb-6">Wprowadź hasło, aby zarządzać wydarzeniami.</p>
                                 <form onSubmit={handleLogin} className="space-y-4">
-                                    <input name="password" type="password" placeholder="Hasło" className="w-full border rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-600" autoFocus />
-                                    <div className="flex gap-2">
-                                        <button type="button" onClick={() => setShowLogin(false)} className="flex-1 py-3 text-slate-500 font-bold">Anuluj</button>
-                                        <button type="submit" className="flex-1 bg-blue-600 text-white rounded-xl py-3 font-bold shadow-lg shadow-blue-200">Zaloguj</button>
+                                    <input name="password" type="password" placeholder="Wpisz hasło..." className="w-full border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-blue-600 transition-all" autoFocus />
+                                    <div className="flex gap-2 pt-2">
+                                        <button type="button" onClick={() => setShowLogin(false)} className="flex-1 py-4 text-slate-400 font-bold text-sm">Anuluj</button>
+                                        <button type="submit" className="flex-1 bg-blue-600 text-white rounded-2xl py-4 font-bold text-sm shadow-lg shadow-blue-200">Zaloguj się</button>
                                     </div>
                                 </form>
                             </div>
                         </div>
                     )}
 
+                    {/* Modal Dodawania/Edycji */}
                     {showModal && (
                         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                            <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md overflow-y-auto max-h-[90vh]">
-                                <h3 className="text-lg font-bold mb-4">{editingEvent ? 'Edytuj' : 'Dodaj'} wydarzenie</h3>
-                                <form onSubmit={saveEvent} className="space-y-4">
+                            <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md overflow-y-auto max-h-[95vh]">
+                                <h3 className="text-xl font-bold mb-6">{editingEvent ? 'Edytuj' : 'Nowe'} wydarzenie</h3>
+                                <form onSubmit={saveEvent} className="space-y-5">
                                     <div>
-                                        <label className="text-xs font-bold text-slate-400 uppercase">Tytuł</label>
-                                        <input name="title" defaultValue={editingEvent?.title} className="w-full border rounded-xl p-3 mt-1" required />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-400 uppercase">Data</label>
-                                        <input name="date" type="date" defaultValue={editingEvent?.date} className="w-full border rounded-xl p-3 mt-1" required />
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tytuł wydarzenia</label>
+                                        <input name="title" defaultValue={editingEvent?.title} className="w-full border-2 border-slate-50 bg-slate-50 rounded-2xl p-4 mt-1 focus:bg-white focus:border-blue-600 outline-none transition-all" placeholder="np. Egzamin ósmoklasisty" required />
                                     </div>
                                     <div>
-                                        <label className="text-xs font-bold text-slate-400 uppercase">Opis</label>
-                                        <textarea name="description" defaultValue={editingEvent?.description} className="w-full border rounded-xl p-3 h-24 mt-1" />
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data</label>
+                                        <input name="date" type="date" defaultValue={editingEvent?.date} className="w-full border-2 border-slate-50 bg-slate-50 rounded-2xl p-4 mt-1 focus:bg-white focus:border-blue-600 outline-none transition-all" required />
                                     </div>
-                                    <div className="flex items-center gap-2 px-2">
-                                        <input type="checkbox" name="isHigh" defaultChecked={editingEvent?.isHigh} id="isHigh" className="w-4 h-4 rounded" />
-                                        <label htmlFor="isHigh" className="text-sm font-bold text-orange-600">Wyróżnij wydarzenie</label>
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dodatkowy opis</label>
+                                        <textarea name="description" defaultValue={editingEvent?.description} className="w-full border-2 border-slate-50 bg-slate-50 rounded-2xl p-4 h-28 mt-1 focus:bg-white focus:border-blue-600 outline-none transition-all resize-none" placeholder="Opcjonalne szczegóły..." />
                                     </div>
-                                    <div className="flex gap-2 pt-2">
-                                        <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-3 text-slate-500 font-bold">Anuluj</button>
-                                        <button type="submit" className="flex-1 bg-blue-600 text-white rounded-xl py-3 font-bold shadow-lg shadow-blue-200">Zapisz</button>
+                                    <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl">
+                                        <input type="checkbox" name="isHigh" defaultChecked={editingEvent?.isHigh} id="isHigh" className="w-5 h-5 rounded-lg border-2 border-slate-300 text-blue-600 focus:ring-blue-600" />
+                                        <label htmlFor="isHigh" className="text-sm font-bold text-slate-600 cursor-pointer">Oznacz jako ważne (pomarańczowy kolor)</label>
+                                    </div>
+                                    <div className="flex gap-2 pt-4">
+                                        <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-4 text-slate-400 font-bold text-sm">Anuluj</button>
+                                        <button type="submit" className="flex-1 bg-blue-600 text-white rounded-2xl py-4 font-bold text-sm shadow-lg shadow-blue-200">Zapisz zmiany</button>
                                     </div>
                                 </form>
                             </div>
