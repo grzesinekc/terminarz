@@ -21,6 +21,8 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
+        /* Płynne przewijanie */
+        html { scroll-behavior: smooth; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
@@ -30,7 +32,6 @@
         const { useState, useEffect, useMemo, useRef } = React;
 
         // --- KONFIGURACJA FIREBASE ---
-        // Tutaj wklej swoje dane z konsoli Firebase:
         const firebaseConfig = {
             apiKey: "AIzaSyAQ6hvZb5aLVQywy0cPnIZEMCj8CJqzTWg",
             authDomain: "terminarz-6e9aa.firebaseapp.com",
@@ -108,7 +109,7 @@
                             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                             setEvents(data);
                         }, err => {
-                            console.error("Błąd pobierania Firestore:", err);
+                            console.error("Błąd pobierania Firestore (sprawdź reguły Rules w konsoli!):", err);
                         });
                     return () => unsubscribe();
                 } else {
@@ -149,7 +150,7 @@
                         setShowModal(false);
                         setEditingEvent(null);
                     } catch (err) {
-                        alert("Błąd zapisu: " + err.message);
+                        alert("Błąd zapisu: " + err.message + ". Upewnij się, że w zakładce Rules w Firebase ustawiono allow read, write: if true;");
                     }
                 } else {
                     alert("Aplikacja w trybie podglądu. Podłącz bazę w kodzie.");
@@ -169,7 +170,7 @@
             return (
                 <div className="min-h-screen flex flex-col pb-12">
                     {/* Górny pasek */}
-                    <header className="bg-white border-b-4 border-blue-600 shadow-sm sticky top-0 z-10">
+                    <header className="bg-white border-b-4 border-blue-600 shadow-sm sticky top-0 z-50">
                         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="bg-blue-600 p-2 rounded-lg text-white flex items-center justify-center shadow-lg shadow-blue-200">
@@ -273,7 +274,7 @@
 
                     {/* Logowanie */}
                     {showLogin && (
-                        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
                             <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm">
                                 <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-4">
                                     <LucideIcon name="lock" size={24} />
@@ -293,7 +294,7 @@
 
                     {/* Modal Dodawania/Edycji */}
                     {showModal && (
-                        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
                             <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md overflow-y-auto max-h-[95vh]">
                                 <h3 className="text-xl font-bold mb-6">{editingEvent ? 'Edytuj' : 'Nowe'} wydarzenie</h3>
                                 <form onSubmit={saveEvent} className="space-y-5">
